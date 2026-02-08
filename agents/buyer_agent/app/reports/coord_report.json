@@ -1,0 +1,114 @@
+{
+  "intent": "wheels ",
+  "quantity": 5,
+  "region": "NG",
+  "timestamp": "2026-02-08T10:03:13.419606",
+  "discovery_paths": [
+    {
+      "agent_id": "supplier-1",
+      "role": "Supplier",
+      "capabilities": {
+        "parts": [
+          "wheels",
+          "tires",
+          "engines"
+        ]
+      },
+      "endpoint": "http://localhost:8001",
+      "policies": {
+        "region": "NG",
+        "compliance": "basic"
+      },
+      "jurisdiction": {
+        "state": "Lagos",
+        "country": "Nigeria",
+        "restricted_regions": [
+          "EU",
+          "US"
+        ],
+        "compliance_standards": [
+          "SON",
+          "NAFDAC"
+        ]
+      },
+      "match_score": 0.388
+    },
+    {
+      "agent_id": "logistics-1",
+      "role": "LogisticsProvider",
+      "capabilities": {
+        "modes": [
+          "road",
+          "port",
+          "hub"
+        ],
+        "regions": [
+          "NG",
+          "West Africa"
+        ]
+      },
+      "endpoint": "http://localhost:8003",
+      "policies": {
+        "region": "NG",
+        "lead_time_max_days": 7
+      },
+      "jurisdiction": {
+        "state": "Lagos",
+        "country": "Nigeria",
+        "compliance_standards": [
+          "SON",
+          "NAFDAC"
+        ]
+      },
+      "match_score": 0.495
+    }
+  ],
+  "message_exchanges": [
+    {
+      "from": "Buyer",
+      "to": "supplier-1",
+      "intent": "request_parts",
+      "response": {
+        "status": "offer_sent",
+        "details": "```json\n{\n  \"offer_price\": 25000,\n  \"lead_days\": 3,\n  \"notes\": \"We confirm that the wheels are NG compliant and available for immediate delivery. The price is 25,000 Naira per unit.\"\n}\n```"
+      }
+    },
+    {
+      "from": "Buyer",
+      "to": "logistics-1",
+      "intent": "request_routing",
+      "response": {
+        "proposal_id": "log-5de2d957",
+        "status": "proposed",
+        "details": "```json\n{\n    \"route\": \"Lagos to Ota via Lagos-Ibadan Expressway\",\n    \"estimated_days\": 1,\n    \"estimated_cost_ngn\": 150000.0,\n    \"risk_level\": \"low\",\n    \"notes\": \"Minor risk of traffic congestion due to ongoing construction on the Lagos-Ibadan Expressway, but this should not significantly impact the overall delivery time. The current Lagos port/hub status is operational, and we will utilize the Apapa port for loading and unloading. Road conditions are generally good, but we will monitor for any unexpected disruptions.\"\n}\n```"
+      }
+    },
+    {
+      "from": "Buyer",
+      "to": "compliance-1",
+      "intent": "verify_compliance",
+      "response": {
+        "verification_id": "comp-20260208100338",
+        "status": "processed",
+        "result": "```json\n{\n    \"status\": \"approved\",\n    \"reason\": \"The offer and route details comply with regional and trade policy requirements. The wheels are confirmed to be NG compliant, and the route from Lagos to Ota via Lagos-Ibadan Expressway poses a low risk of significant disruptions.\",\n    \"risk_level\": \"low\",\n    \"required_actions\": []\n}\n```"
+      }
+    }
+  ],
+  "verification_logic": [
+    "Semantic discovery with cosine + policy filter",
+    "LLM-based decision in agents"
+  ],
+  "policy_enforcement": [
+    "Region restricted to NG",
+    "Compliance agent verified offer & route"
+  ],
+  "final_plan": {
+    "status": "processed",
+    "total_cost_estimate": 2250.0,
+    "lead_time_days": 5,
+    "route": "Lagos -> Ota",
+    "supplier_used": "supplier-1",
+    "resilience_applied": false
+  },
+  "disruptions": []
+}

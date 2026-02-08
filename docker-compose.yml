@@ -1,0 +1,59 @@
+version: '3.9'
+
+services:
+  registry:
+    build: ./registry
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./reports:/reports
+
+  buyer:
+    build: ./agents/buyer
+    ports:
+      - "8002:8002"
+    depends_on:
+      - registry
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    volumes:
+      - ./reports:/reports
+
+  supplier:
+    build: ./agents/supplier
+    ports:
+      - "8001:8001"
+    depends_on:
+      - registry
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+
+  logistics:
+    build: ./agents/logistics
+    ports:
+      - "8003:8003"
+    depends_on:
+      - registry
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+
+  compliance:
+    build: ./agents/compliance
+    ports:
+      - "8004:8004"
+    depends_on:
+      - registry
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "8501:8501"
+    depends_on:
+      - buyer
+      - registry
+    volumes:
+      - ./reports:/reports
+
+volumes: {}
