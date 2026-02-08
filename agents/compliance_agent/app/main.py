@@ -27,25 +27,54 @@ class ComplianceCheck(BaseModel):
 @app.on_event("startup")
 async def register_self():
     
-    payload = {
-        "agent_id": "compliance-1",
-        "role": "ComplianceAgent",
-        "capabilities": {"checks": ["policy", "region", "trade_compliance", "esg"]},
-        #"endpoint": "http://compliance:8004",
-        "endpoint": "http://localhost:8004",
-        "policies": {"region": "NG", "enforce_level": "strict"},
-        "jurisdiction": {
-            "country": "Nigeria",
-            "state": "Lagos",
-            "compliance_standards": ["SON", "NAFDAC"],
-            "restricted_regions": ["EU", "US"]
-        }
-    }
-    try:
-        requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=8)
-        print("Compliance agent registered successfully")
-    except Exception as e:
-        print(f"Registration failed: {e}")
+    payloads = [
+        {
+            "agent_id": "compliance-1",
+            "role": "ComplianceAgent",
+            "capabilities": {"checks": ["policy", "region", "trade_compliance", "esg"]},
+            #"endpoint": "http://compliance:8004",
+            "endpoint": "http://localhost:8004",
+            "policies": {"region": "NG", "enforce_level": "strict"},
+            "jurisdiction": {
+                "country": "Nigeria",
+                "state": "Lagos",
+                "compliance_standards": ["SON", "NAFDAC"],
+                "restricted_regions": ["EU", "US"]
+            }
+        },
+        {
+            "agent_id": "compliance-2",
+            "role": "ComplianceAgent",
+            "capabilities": {"checks": ["policy", "region", "trade_compliance", "esg"]},
+            "endpoint": "http://localhost:8004",
+            "policies": {"region": "EU", "enforce_level": "strict"},
+            "jurisdiction": {
+                "country": "Germany",
+                "state": "Bavaria",
+                "compliance_standards": ["CE", "RoHS", "GDPR"],
+                "restricted_regions": ["US"]
+            }
+        },
+        {
+            "agent_id": "compliance-3",
+            "role": "ComplianceAgent",
+            "capabilities": {"checks": ["policy", "region", "trade_compliance", "esg"]},
+            "endpoint": "http://localhost:8004",
+            "policies": {"region": "US", "enforce_level": "moderate"},
+            "jurisdiction": {
+                "country": "United States",
+                "state": "California",
+                "compliance_standards": ["FTC", "SOX"],
+                "restricted_regions": ["EU"]
+            }
+        },
+    ]
+    for payload in payloads:
+        try:
+            requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=8)
+            print(f"Compliance agent registered successfully: {payload['agent_id']}")
+        except Exception as e:
+            print(f"Registration failed for {payload['agent_id']}: {e}")
 
 @app.post("/verify")
 def verify_compliance(check: ComplianceCheck):
@@ -69,13 +98,12 @@ def verify_compliance(check: ComplianceCheck):
 
     try:
         resp = client.chat.completions.create(
-            model="gpt-oss-20b",
+            model="openai/gpt-oss-20b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=300
         )
         result = resp.choices[0].message.content.strip()
-        # In production you'd parse JSON properly – here we assume LLM returns valid JSON
         return {
             "verification_id": f"comp-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
             "status": "processed",

@@ -27,24 +27,51 @@ class RouteRequest(BaseModel):
 
 @app.on_event("startup")
 async def register_self():
-    payload = {
-        "agent_id": "logistics-1",
-        "role": "LogisticsProvider",
-        "capabilities": {"regions": ["NG", "West Africa"], "modes": ["road", "port", "hub"]},
-        #"endpoint": "http://logistics:8003",
-        "endpoint": "http://localhost:8003",
-        "policies": {"region": "NG", "lead_time_max_days": 7},
-        "jurisdiction": {
-            "country": "Nigeria",
-            "state": "Lagos",
-            "compliance_standards": ["SON", "NAFDAC"],
-        }
-    }
-    try:
-        requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=8)
-        print("Logistics agent registered successfully.")
-    except Exception as e:
-        print(f"Registration failed: {e}")
+    payloads = [
+        {
+            "agent_id": "logistics-1",
+            "role": "LogisticsProvider",
+            "capabilities": {"regions": ["NG", "West Africa"], "modes": ["road", "port", "hub"]},
+            #"endpoint": "http://logistics:8003",
+            "endpoint": "http://localhost:8003",
+            "policies": {"region": "NG", "lead_time_max_days": 7},
+            "jurisdiction": {
+                "country": "Nigeria",
+                "state": "Lagos",
+                "compliance_standards": ["SON", "NAFDAC"],
+            }
+        },
+        {
+            "agent_id": "logistics-2",
+            "role": "LogisticsProvider",
+            "capabilities": {"regions": ["EU"], "modes": ["air", "hub"]},
+            "endpoint": "http://localhost:8003",
+            "policies": {"region": "EU", "lead_time_max_days": 3},
+            "jurisdiction": {
+                "country": "Netherlands",
+                "state": "North Holland",
+                "compliance_standards": ["EU-SEC", "CE"],
+            }
+        },
+        {
+            "agent_id": "logistics-3",
+            "role": "LogisticsProvider",
+            "capabilities": {"regions": ["US"], "modes": ["rail", "road"]},
+            "endpoint": "http://localhost:8003",
+            "policies": {"region": "US", "lead_time_max_days": 5},
+            "jurisdiction": {
+                "country": "United States",
+                "state": "Illinois",
+                "compliance_standards": ["DOT", "FMCSA"],
+            }
+        },
+    ]
+    for payload in payloads:
+        try:
+            requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=8)
+            print(f"Logistics agent registered successfully: {payload['agent_id']}")
+        except Exception as e:
+            print(f"Registration failed for {payload['agent_id']}: {e}")
 
 @app.post("/route")
 def propose_route(req: RouteRequest):
@@ -69,7 +96,7 @@ def propose_route(req: RouteRequest):
 
     try:
         resp = client.chat.completions.create(
-            model="gpt-oss-20b",
+            model="openai/gpt-oss-20b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.45,
             max_tokens=250

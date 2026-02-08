@@ -31,16 +31,21 @@ client = openai.OpenAI(
 )
 
 class IntentRequest(BaseModel):
-    intent: str                     # e.g. "Buy 100 wheels for Ferrari assembly"
-    quantity: int = 50
-    region: str = "NG"              # default to Nigeria / Lagos context
-    origin: str = "Lagos"
-    destination: str = "Ota"
+    intent: str                    
+    region: str = "NG"              
+    quantity: int | None = None
+    origin: str | None = None
+    destination: str | None = None
 
 def _parse_json_maybe(value):
     if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned.startswith("```"):
+            # Strip markdown code fences if present
+            cleaned = cleaned.strip("`")
+            cleaned = cleaned.replace("json", "", 1).strip()
         try:
-            return json.loads(value)
+            return json.loads(cleaned)
         except Exception:
             return value
     return value
@@ -54,7 +59,7 @@ def _extract_supplier_query(intent: str) -> str:
     )
     try:
         resp = client.chat.completions.create(
-            model="gpt-oss-20b",
+            model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": "You extract concise supplier search queries."},
                 {"role": "user", "content": f"Intent: {intent}\n{prompt}"},
@@ -71,28 +76,81 @@ def _extract_supplier_query(intent: str) -> str:
         pass
     return f"{intent} supplier"
 
+def _extract_intent_fields(intent: str) -> dict:
+    prompt = (
+        "Extract structured fields from the intent. Return JSON only:\n"
+        "{\"part\": str or null, \"quantity\": int or null, \"origin\": str or null, \"destination\": str or null}\n"
+        "If missing, return null for that field."
+    )
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-oss-20b",
+            messages=[
+                {"role": "system", "content": "You extract structured fields from intents."},
+                {"role": "user", "content": f"Intent: {intent}\n{prompt}"},
+            ],
+            temperature=0.1,
+            max_tokens=80,
+        )
+        content = resp.choices[0].message.content.strip()
+        data = json.loads(content)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {"part": None, "quantity": None, "origin": None, "destination": None}
+
 @app.on_event("startup")
 async def register_self():
-    payload = {
-        "agent_id": "buyer-1",
-        "role": "Procurement",
-        "capabilities": {"actions": ["orchestrate", "procure", "coordinate", "retry"]},
-        #"endpoint": "http://buyer:8002",
-        "endpoint": "http://localhost:8002",
-        "policies": {"region": "NG", "compliance_required": "high", "resilience": "enabled"},
-        "jurisdiction": {
-            "country": "Nigeria",
-            "state": "Lagos",
-            "compliance_standards": ["SON", "NAFDAC"],
-            "restricted_regions": ["EU", "US"]
-        }
-    }
-    try:
-        r = requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=10)
-        r.raise_for_status()
-        print("Buyer agent registered successfully")
-    except Exception as e:
-        print(f"Buyer registration failed: {e}")
+    payloads = [
+        {
+            "agent_id": "buyer-1",
+            "role": "Procurement",
+            "capabilities": {"actions": ["orchestrate", "procure", "coordinate", "retry"]},
+            #"endpoint": "http://buyer:8002",
+            "endpoint": "http://localhost:8002",
+            "policies": {"region": "NG", "compliance_required": "high", "resilience": "enabled"},
+            "jurisdiction": {
+                "country": "Nigeria",
+                "state": "Lagos",
+                "compliance_standards": ["SON", "NAFDAC"],
+                "restricted_regions": ["EU", "US"]
+            }
+        },
+        {
+            "agent_id": "buyer-2",
+            "role": "Procurement",
+            "capabilities": {"actions": ["orchestrate", "procure", "coordinate"]},
+            "endpoint": "http://localhost:8002",
+            "policies": {"region": "EU", "compliance_required": "high", "resilience": "enabled"},
+            "jurisdiction": {
+                "country": "Germany",
+                "state": "Bavaria",
+                "compliance_standards": ["CE", "RoHS"],
+                "restricted_regions": ["US"]
+            }
+        },
+        {
+            "agent_id": "buyer-3",
+            "role": "Procurement",
+            "capabilities": {"actions": ["orchestrate", "procure", "coordinate"]},
+            "endpoint": "http://localhost:8002",
+            "policies": {"region": "US", "compliance_required": "medium", "resilience": "enabled"},
+            "jurisdiction": {
+                "country": "United States",
+                "state": "California",
+                "compliance_standards": ["FTC", "SOX"],
+                "restricted_regions": ["EU"]
+            }
+        },
+    ]
+    for payload in payloads:
+        try:
+            r = requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=10)
+            r.raise_for_status()
+            print(f"Buyer agent registered successfully: {payload['agent_id']}")
+        except Exception as e:
+            print(f"Buyer registration failed for {payload['agent_id']}: {e}")
 
 @app.post("/intent")
 async def execute_intent(req: IntentRequest):
@@ -110,7 +168,20 @@ async def execute_intent(req: IntentRequest):
     }
 
     try:
+        # Fill missing fields from intent text
+        extracted = _extract_intent_fields(req.intent)
+        part = extracted.get("part") or "wheels"
+        quantity = req.quantity or extracted.get("quantity") or 50
+        origin = req.origin or extracted.get("origin") or "Lagos"
+        destination = req.destination or extracted.get("destination") or "Ota"
+        report["part"] = part
+        report["quantity"] = quantity
+        report["origin"] = origin
+        report["destination"] = destination
+
+
         # ── 1. Semantic discovery ────────────────────────────────────────
+        print("[buyer] starting discovery")
         supplier_params = {"q": f"{req.intent} supplier", "region": req.region}
         suppliers = requests.get(
             f"{REGISTRY_URL}/discover",
@@ -118,15 +189,17 @@ async def execute_intent(req: IntentRequest):
             timeout=30,
             proxies={"http": None, "https": None},
         ).json()
+        print(f"[buyer] primary supplier results: {len(suppliers) if isinstance(suppliers, list) else suppliers}")
 
         if not suppliers:
+            print("[buyer] no suppliers found, invoking ASI parser")
             fallback_query = _extract_supplier_query(req.intent)
             print(f"[buyer] fallback supplier query: {fallback_query}")
             supplier_params = {"q": fallback_query, "region": req.region}
             suppliers = requests.get(
                 f"{REGISTRY_URL}/discover",
                 params=supplier_params,
-                timeout=8,
+                timeout=30,
                 proxies={"http": None, "https": None},
             ).json()
             print(f"[buyer] fallback supplier results: {len(suppliers) if isinstance(suppliers, list) else suppliers}")
@@ -148,8 +221,6 @@ async def execute_intent(req: IntentRequest):
         report["discovery_paths"].append(logistics_agents[0])
         logistics_endpoint = logistics_agents[0]["endpoint"] + "/route"
 
-        # CrewAI orchestration removed to avoid dependency conflicts
-
         # ── 3. Call Supplier with disruption simulation & retry ───────────────
         disruption_occurred = False
         selected_supplier = suppliers[0]
@@ -164,7 +235,7 @@ async def execute_intent(req: IntentRequest):
 
                 supplier_resp = requests.post(
                     supplier_endpoint,
-                    json={"part": "wheels", "quantity": req.quantity},
+                    json={"part": part, "quantity": quantity},
                     timeout=12,
                     proxies={"http": None, "https": None},
                 )
@@ -212,7 +283,7 @@ async def execute_intent(req: IntentRequest):
         # ── 4. Call Logistics ────────────────────────────────────────────────
         logistics_resp = requests.post(
             logistics_endpoint,
-            json={"origin": req.origin, "destination": req.destination, "quantity": req.quantity, "part": "wheels"},
+            json={"origin": origin, "destination": destination, "quantity": quantity, "part": part},
             timeout=10,
             proxies={"http": None, "https": None},
         ).json()
@@ -250,10 +321,32 @@ async def execute_intent(req: IntentRequest):
         logistics_details = logistics_resp.get("details") if isinstance(logistics_resp, dict) else {}
         if not isinstance(logistics_details, dict):
             logistics_details = {}
+        supplier_details = supplier_data.get("details") if isinstance(supplier_data, dict) else {}
+        supplier_details = _parse_json_maybe(supplier_details)
+        if not isinstance(supplier_details, dict):
+            supplier_details = {}
+        offer_price = supplier_details.get("offer_price")
+        lead_days = supplier_details.get("lead_days")
+        estimated_cost = None
+        if isinstance(offer_price, (int, float)):
+            estimated_cost = offer_price * quantity
+
+        lead_time_days = None
+        try:
+            log_days = logistics_details.get("estimated_days")
+            if isinstance(lead_days, (int, float)) and isinstance(log_days, (int, float)):
+                lead_time_days = int(max(lead_days, log_days))
+            elif isinstance(lead_days, (int, float)):
+                lead_time_days = int(lead_days)
+            elif isinstance(log_days, (int, float)):
+                lead_time_days = int(log_days)
+        except Exception:
+            lead_time_days = None
+
         report["final_plan"] = {
             "status": compliance_resp.get("status", "pending"),
-            "total_cost_estimate": 2250.0,  # placeholder — in real version parse from responses
-            "lead_time_days": 5,
+            "total_cost_estimate": estimated_cost if estimated_cost is not None else "N/A",
+            "lead_time_days": lead_time_days if lead_time_days is not None else "N/A",
             "route": logistics_details.get("route", "Lagos -> Ota"),
             "supplier_used": selected_supplier["agent_id"],
             "resilience_applied": disruption_occurred

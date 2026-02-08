@@ -7,7 +7,12 @@ for agent discovery and semantic search.
 
 ### Prerequisites
 - Python 3.11+
-- `GROQ_API_KEY` in your environment
+- `ASI_API_KEY` in your environment
+
+### LLM Configuration
+This project is LLM-agnostic. By default it uses ASI Cloud (`ASI_API_KEY`).
+You can swap to any OpenAI-compatible endpoint by changing the `base_url`,
+`api_key`, and `model` in the agent files.
 
 ### Install
 ```powershell

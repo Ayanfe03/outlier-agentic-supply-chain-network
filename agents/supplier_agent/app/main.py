@@ -26,25 +26,54 @@ class Request(BaseModel):
 
 @app.on_event("startup")
 async def register_self():
-    payload = {
-        "agent_id": "supplier-1",
-        "role": "Supplier",
-        "capabilities": {"parts": ["wheels", "tires", "engines"]},
-        # "endpoint": "http://supplier:8001",
-        "endpoint": "http://localhost:8001",
-        "policies": {"region": "NG", "compliance": "basic"},
-        "jurisdiction": {
-            "country": "Nigeria",
-            "state": "Lagos",
-            "compliance_standards": ["SON", "NAFDAC"],
-            "restricted_regions": ["EU", "US"]
-        }
-    }
-    try:
-        requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=5)
-        print("Supplier registered")
-    except:
-        print("Registry not ready yet - retry later")
+    payloads = [
+        {
+            "agent_id": "supplier-1",
+            "role": "Supplier",
+            "capabilities": {"parts": ["wheels", "tires", "engines"]},
+            # "endpoint": "http://supplier:8001",
+            "endpoint": "http://localhost:8001",
+            "policies": {"region": "NG", "compliance": "basic"},
+            "jurisdiction": {
+                "country": "Nigeria",
+                "state": "Lagos",
+                "compliance_standards": ["SON", "NAFDAC"],
+                "restricted_regions": ["EU", "US"]
+            }
+        },
+        {
+            "agent_id": "supplier-2",
+            "role": "Supplier",
+            "capabilities": {"parts": ["sensors", "electronics", "control units"]},
+            "endpoint": "http://localhost:8001",
+            "policies": {"region": "EU", "compliance": "strict"},
+            "jurisdiction": {
+                "country": "Germany",
+                "state": "Bavaria",
+                "compliance_standards": ["CE", "RoHS"],
+                "restricted_regions": ["NG"]
+            }
+        },
+        {
+            "agent_id": "supplier-3",
+            "role": "Supplier",
+            "capabilities": {"parts": ["steel", "aluminum", "fasteners"]},
+            "endpoint": "http://localhost:8001",
+            "policies": {"region": "US", "compliance": "standard"},
+            "jurisdiction": {
+                "country": "United States",
+                "state": "Michigan",
+                "compliance_standards": ["ASTM", "ISO9001"],
+                "restricted_regions": ["EU"]
+            }
+        },
+    ]
+    for payload in payloads:
+        try:
+            requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=5)
+            print(f"Supplier agent registered successfully: {payload['agent_id']}")
+        except Exception as e:
+            print(f"Registry not ready for {payload['agent_id']} - retry later: {e}")
 
 @app.post("/request")
 def handle_request(req: Request):
@@ -54,14 +83,16 @@ def handle_request(req: Request):
     Negotiate price, lead time, confirm NG compliance.
     Respond in JSON: {{"offer_price": number, "lead_days": int, "notes": str}}"""
     
-    resp = client.chat.completions.create(
-        model="gpt-oss-20b",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.4,
-        max_tokens=200
-    )
     try:
+        resp = client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=200
+        )
         decision = resp.choices[0].message.content.strip()
         return {"status": "offer_sent", "details": decision}
-    except:
-        return {"status": "error", "details": "LLM failed"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "details": str(e)}

@@ -6,33 +6,73 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timezone
 from pathlib import Path
 
-st.set_page_config(page_title="One Click AI – Supply Chain Agents", layout="wide")
+st.set_page_config(page_title="Outlier Agentic Protocol", layout="wide")
 
-st.title("One Click AI – NANDA-Native Internet of Agents Simulation")
+st.markdown(
+    """
+    <style>
+    :root {
+      --bg: #0f131a;
+      --panel: #151b24;
+      --accent: #3ad6a5;
+      --accent-2: #4ea1ff;
+      --text: #e8eef7;
+      --muted: #9aa7b8;
+    }
+    .main { background: var(--bg); color: var(--text); }
+    .block-container { padding-top: 2.5rem; }
+    h1, h2, h3, h4 { color: var(--text); font-family: 'Space Grotesk', sans-serif; }
+    .stMarkdown, .stText, .stCaption { color: var(--text); }
+    .sidebar .sidebar-content { background: var(--panel); }
+    .kpi-card {
+      background: linear-gradient(135deg, #1b2431, #121721);
+      border: 1px solid #243244;
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .kpi-label { color: var(--muted); font-size: 0.85rem; }
+    .kpi-value { font-size: 1.4rem; font-weight: 600; color: var(--text); }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(58,214,165,0.15);
+      color: var(--accent);
+      border: 1px solid rgba(58,214,165,0.35);
+      font-size: 0.8rem;
+      margin-right: 6px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("### Outlier Agentic Protocol")
+st.caption("Programmable supply-chain coordination via autonomous agent networks")
 
 # Sidebar controls
-st.sidebar.header("Controls")
+st.sidebar.header("Control Panel")
 intent = st.sidebar.text_input("Declare your procurement intent", "Buy 100 wheels for Ferrari assembly")
-quantity = st.sidebar.number_input("Quantity", min_value=1, value=50)
 region = st.sidebar.selectbox("Preferred Region", ["NG", "EU", "Any"], index=0)
-origin = st.sidebar.text_input("Origin", "Lagos")
-destination = st.sidebar.text_input("Destination", "Ota")
 
 if st.sidebar.button("Execute One Click"):
     with st.spinner("Orchestrating decentralized agents..."):
         payload = {
             "intent": intent,
-            "quantity": quantity,
             "region": region if region != "Any" else None,
-            "origin": origin,
-            "destination": destination,
         }
         try:
             #resp = requests.post("http://buyer:8002/intent", json=payload, timeout=30)
-            resp = requests.post("http://localhost:8002/intent", json=payload, timeout=30)
+            resp = requests.post(
+                "http://localhost:8002/intent",
+                json=payload,
+                timeout=30,
+                proxies={"http": None, "https": None},
+            )
             resp.raise_for_status()
             result = resp.json()
-            st.success("Cascade executed successfully!")
+            st.success("Cascade executed successfully.")
             st.session_state.last_result = result
         except Exception as e:
             st.error(f"Orchestration failed: {str(e)}")
@@ -83,6 +123,16 @@ with tab3:
 
     G = nx.DiGraph()
 
+    # Add facility/hub nodes from final plan if available
+    origin = report.get("origin") or report.get("final_plan", {}).get("origin")
+    destination = report.get("destination") or report.get("final_plan", {}).get("destination")
+    if origin:
+        G.add_node(origin, label=f"Facility\\n{origin}")
+    if destination:
+        G.add_node(destination, label=f"Facility\\n{destination}")
+    if origin and destination:
+        G.add_edge(origin, destination, label="route")
+
     # Add nodes from discovered agents
     for path in report.get("discovery_paths", []):
         if isinstance(path, dict):
@@ -90,7 +140,27 @@ with tab3:
             role = path.get("role", "Agent")
             G.add_node(agent_id, label=f"{role}\n{agent_id}")
 
-    # Add edges from message exchanges
+    # Material flow edges (supplier -> logistics -> destination)
+    part = report.get("part") or "goods"
+    qty = report.get("quantity") or ""
+    qty_label = f"{qty} " if qty else ""
+    supplier_id = None
+    logistics_id = None
+    for path in report.get("discovery_paths", []):
+        if isinstance(path, dict):
+            if path.get("role") == "Supplier" and not supplier_id:
+                supplier_id = path.get("agent_id")
+            if path.get("role") == "LogisticsProvider" and not logistics_id:
+                logistics_id = path.get("agent_id")
+    buyer_id = "buyer-1"
+    if supplier_id:
+        G.add_edge(buyer_id, supplier_id, label=f"order:{qty_label}{part}")
+    if supplier_id and logistics_id:
+        G.add_edge(supplier_id, logistics_id, label=f"material:{qty_label}{part}")
+    if logistics_id and destination:
+        G.add_edge(logistics_id, destination, label=f"delivery:{qty_label}{part}")
+
+    # Add edges from message exchanges (information flow)
     for msg in report.get("message_exchanges", []):
         if isinstance(msg, dict) and "from" in msg and "to" in msg:  # if structured
             G.add_edge(msg["from"], msg["to"], label=msg.get("intent", "flow"))

@@ -7,9 +7,5 @@ streamlit==1.42.0
 requests==2.32.3
 python-dotenv==1.0.1
 sentence-transformers==3.4.1
-numpy==1.26.4
+numpy>=2.1.0
 openai~=1.83.0
-tokenizers~=0.20.3
-langchain==1.2.9
-langchain_groq
-litellm
