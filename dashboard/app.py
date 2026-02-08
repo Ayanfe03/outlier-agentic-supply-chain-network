@@ -11,44 +11,21 @@ st.set_page_config(page_title="Outlier Agentic Protocol", layout="wide")
 st.markdown(
     """
     <style>
-    :root {
-      --bg: #0f131a;
-      --panel: #151b24;
-      --accent: #3ad6a5;
-      --accent-2: #4ea1ff;
-      --text: #e8eef7;
-      --muted: #9aa7b8;
-    }
-    .main { background: var(--bg); color: var(--text); }
-    .block-container { padding-top: 2.5rem; }
-    h1, h2, h3, h4 { color: var(--text); font-family: 'Space Grotesk', sans-serif; }
-    .stMarkdown, .stText, .stCaption { color: var(--text); }
-    .sidebar .sidebar-content { background: var(--panel); }
+    .block-container { padding-top: 2rem; }
     .kpi-card {
-      background: linear-gradient(135deg, #1b2431, #121721);
-      border: 1px solid #243244;
-      border-radius: 14px;
-      padding: 14px 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      background: #f7f7fb;
+      border: 1px solid #e4e6ef;
+      border-radius: 12px;
+      padding: 12px 14px;
     }
-    .kpi-label { color: var(--muted); font-size: 0.85rem; }
-    .kpi-value { font-size: 1.4rem; font-weight: 600; color: var(--text); }
-    .pill {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(58,214,165,0.15);
-      color: var(--accent);
-      border: 1px solid rgba(58,214,165,0.35);
-      font-size: 0.8rem;
-      margin-right: 6px;
-    }
+    .kpi-label { color: #5b6270; font-size: 0.85rem; }
+    .kpi-value { font-size: 1.3rem; font-weight: 600; color: #111827; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-st.markdown("### Outlier Agentic Protocol")
+st.title("Outlier Agentic Protocol")
 st.caption("Programmable supply-chain coordination via autonomous agent networks")
 
 # Sidebar controls
@@ -56,7 +33,7 @@ st.sidebar.header("Control Panel")
 intent = st.sidebar.text_input("Declare your procurement intent", "Buy 100 wheels for Ferrari assembly")
 region = st.sidebar.selectbox("Preferred Region", ["NG", "EU", "Any"], index=0)
 
-if st.sidebar.button("Execute One Click"):
+if st.sidebar.button("Run Protocol"):
     with st.spinner("Orchestrating decentralized agents..."):
         payload = {
             "intent": intent,
@@ -67,7 +44,7 @@ if st.sidebar.button("Execute One Click"):
             resp = requests.post(
                 "http://localhost:8002/intent",
                 json=payload,
-                timeout=30,
+                timeout=90,
                 proxies={"http": None, "https": None},
             )
             resp.raise_for_status()
@@ -96,11 +73,32 @@ tab1, tab2, tab3 = st.tabs(["Overview", "Coordination Report", "Supply Network G
 with tab1:
     st.subheader("Execution Summary")
     if report.get("final_plan"):
-        st.metric("Status", report["final_plan"].get("status", "N/A"))
+        st.write(f"Status: {report['final_plan'].get('status', 'N/A')}")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Estimated Cost", f"₦{report['final_plan'].get('total_cost_estimate', 'N/A'):,}")
-        col2.metric("Lead Time", f"{report['final_plan'].get('lead_time_days', 'N/A')} days")
-        col3.metric("Route", report["final_plan"].get("route", "N/A"))
+        with col1:
+            st.markdown(
+                f"""<div class='kpi-card'>
+                <div class='kpi-label'>Estimated Cost</div>
+                <div class='kpi-value'>₦{report['final_plan'].get('total_cost_estimate', 'N/A')}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        with col2:
+            st.markdown(
+                f"""<div class='kpi-card'>
+                <div class='kpi-label'>Lead Time</div>
+                <div class='kpi-value'>{report['final_plan'].get('lead_time_days', 'N/A')} days</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        with col3:
+            st.markdown(
+                f"""<div class='kpi-card'>
+                <div class='kpi-label'>Route</div>
+                <div class='kpi-value'>{report['final_plan'].get('route', 'N/A')}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
 
     if "disruption" in json.dumps(report):
         st.warning("⚠️ Disruption occurred – resilience features activated (rediscovery & retry)")

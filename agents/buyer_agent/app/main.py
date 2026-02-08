@@ -15,20 +15,17 @@ app = FastAPI(title="Buyer / Procurement Agent")
 
 #REGISTRY_URL = "http://registry:8000"
 REGISTRY_URL = "http://localhost:8000"
-ASI_API_KEY = os.getenv("ASI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH = REPORT_DIR / "coord_report.json"
 
 
-if not ASI_API_KEY:
-    raise ValueError("ASI_API_KEY not set in environment")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not set in environment")
 
-client = openai.OpenAI(
-    api_key=ASI_API_KEY,
-    base_url="https://inference.asicloud.cudos.org/v1",
-)
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 class IntentRequest(BaseModel):
     intent: str                    
@@ -44,6 +41,15 @@ def _parse_json_maybe(value):
             # Strip markdown code fences if present
             cleaned = cleaned.strip("`")
             cleaned = cleaned.replace("json", "", 1).strip()
+        # Try to extract the first JSON object in the string
+        if "{" in cleaned and "}" in cleaned:
+            start = cleaned.find("{")
+            end = cleaned.rfind("}") + 1
+            candidate = cleaned[start:end]
+            try:
+                return json.loads(candidate)
+            except Exception:
+                pass
         try:
             return json.loads(cleaned)
         except Exception:
@@ -59,7 +65,7 @@ def _extract_supplier_query(intent: str) -> str:
     )
     try:
         resp = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You extract concise supplier search queries."},
                 {"role": "user", "content": f"Intent: {intent}\n{prompt}"},
@@ -84,7 +90,7 @@ def _extract_intent_fields(intent: str) -> dict:
     )
     try:
         resp = client.chat.completions.create(
-            model="gpt-oss-20b",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You extract structured fields from intents."},
                 {"role": "user", "content": f"Intent: {intent}\n{prompt}"},
@@ -192,7 +198,7 @@ async def execute_intent(req: IntentRequest):
         print(f"[buyer] primary supplier results: {len(suppliers) if isinstance(suppliers, list) else suppliers}")
 
         if not suppliers:
-            print("[buyer] no suppliers found, invoking ASI parser")
+            print("[buyer] no suppliers found, invoking LLM parser")
             fallback_query = _extract_supplier_query(req.intent)
             print(f"[buyer] fallback supplier query: {fallback_query}")
             supplier_params = {"q": fallback_query, "region": req.region}
@@ -241,6 +247,7 @@ async def execute_intent(req: IntentRequest):
                 )
                 supplier_resp.raise_for_status()
                 supplier_data = supplier_resp.json()
+                print(f"[buyer] supplier details raw: {supplier_data.get('details') if isinstance(supplier_data, dict) else supplier_data}")
 
                 report["message_exchanges"].append({
                     "from": "Buyer",
@@ -284,11 +291,12 @@ async def execute_intent(req: IntentRequest):
         logistics_resp = requests.post(
             logistics_endpoint,
             json={"origin": origin, "destination": destination, "quantity": quantity, "part": part},
-            timeout=10,
+            timeout=45,
             proxies={"http": None, "https": None},
         ).json()
         if isinstance(logistics_resp, dict):
             logistics_resp["details"] = _parse_json_maybe(logistics_resp.get("details"))
+        print(f"[buyer] logistics details raw: {logistics_resp.get('details') if isinstance(logistics_resp, dict) else logistics_resp}")
 
         report["message_exchanges"].append({
             "from": "Buyer",
@@ -302,7 +310,7 @@ async def execute_intent(req: IntentRequest):
             #"http://compliance:8004/verify",
             "http://localhost:8004/verify",
             json={"offer": supplier_data, "route": logistics_resp},
-            timeout=10,
+            timeout=45,
             proxies={"http": None, "https": None},
         ).json()
         if isinstance(compliance_resp, dict):

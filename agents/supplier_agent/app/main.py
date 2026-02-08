@@ -6,13 +6,10 @@ import openai
 from dotenv import load_dotenv
 
 load_dotenv()
-ASI_API_KEY = os.getenv("ASI_API_KEY")
-if not ASI_API_KEY:
-    raise ValueError("ASI_API_KEY not set in environment")
-client = openai.OpenAI(
-    api_key=ASI_API_KEY,
-    base_url="https://inference.asicloud.cudos.org/v1",
-)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not set in environment")
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI(title="Supplier Agent")
 
@@ -85,12 +82,15 @@ def handle_request(req: Request):
     
     try:
         resp = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.4,
             max_tokens=200
         )
+        print(f"[supplier] raw response: {resp}")
         decision = resp.choices[0].message.content.strip()
+        if not decision:
+            print("[supplier] empty content from LLM")
         return {"status": "offer_sent", "details": decision}
     except Exception as e:
         import traceback

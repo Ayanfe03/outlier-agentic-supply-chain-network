@@ -12,13 +12,10 @@ app = FastAPI(title="Compliance & Verification Agent")
 
 #REGISTRY_URL = "http://registry:8000"
 REGISTRY_URL = "http://localhost:8000"
-ASI_API_KEY = os.getenv("ASI_API_KEY")
-if not ASI_API_KEY:
-    raise ValueError("ASI_API_KEY not set in environment")
-client = openai.OpenAI(
-    api_key=ASI_API_KEY,
-    base_url="https://inference.asicloud.cudos.org/v1",
-)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not set in environment")
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 class ComplianceCheck(BaseModel):
     offer: dict
@@ -98,7 +95,7 @@ def verify_compliance(check: ComplianceCheck):
 
     try:
         resp = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=300

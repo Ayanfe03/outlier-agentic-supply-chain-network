@@ -15,7 +15,7 @@ services:
     depends_on:
       - registry
     environment:
-      - ASI_API_KEY=${ASI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./reports:/reports
 
@@ -26,7 +26,7 @@ services:
     depends_on:
       - registry
     environment:
-      - ASI_API_KEY=${ASI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
 
   logistics:
     build: ./agents/logistics
@@ -35,7 +35,7 @@ services:
     depends_on:
       - registry
     environment:
-      - ASI_API_KEY=${ASI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
 
   compliance:
     build: ./agents/compliance
@@ -44,7 +44,7 @@ services:
     depends_on:
       - registry
     environment:
-      - ASI_API_KEY=${ASI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
 
   dashboard:
     build: ./dashboard

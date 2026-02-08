@@ -11,13 +11,10 @@ app = FastAPI(title="Logistics & Routing Agent")
 
 #REGISTRY_URL = "http://registry:8000"
 REGISTRY_URL = "http://localhost:8000"
-ASI_API_KEY = os.getenv("ASI_API_KEY")
-if not ASI_API_KEY:
-    raise ValueError("ASI_API_KEY not set in environment")
-client = openai.OpenAI(
-    api_key=ASI_API_KEY,
-    base_url="https://inference.asicloud.cudos.org/v1",
-)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not set in environment")
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 class RouteRequest(BaseModel):
     origin: str
@@ -96,12 +93,15 @@ def propose_route(req: RouteRequest):
 
     try:
         resp = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.45,
             max_tokens=250
         )
+        print(f"[logistics] raw response: {resp}")
         result = resp.choices[0].message.content.strip()
+        if not result:
+            print("[logistics] empty content from LLM")
         return {
             "proposal_id": f"log-{os.urandom(4).hex()}",
             "status": "proposed",
