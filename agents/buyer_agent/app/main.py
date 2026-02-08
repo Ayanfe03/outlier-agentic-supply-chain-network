@@ -18,7 +18,7 @@ ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8002")
 COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", "http://localhost:8004")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
+REPORT_DIR = Path(os.getenv("REPORT_DIR", "/reports"))
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH = REPORT_DIR / "coord_report.json"
 
