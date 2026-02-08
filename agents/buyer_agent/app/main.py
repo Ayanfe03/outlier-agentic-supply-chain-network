@@ -18,9 +18,15 @@ ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8002")
 COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", "http://localhost:8004")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-REPORT_DIR = Path(os.getenv("REPORT_DIR", "/reports"))
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
-REPORT_PATH = REPORT_DIR / "coord_report.json"
+
+try:
+    REPORT_DIR = Path(os.getenv("REPORT_DIR", "/reports"))
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    REPORT_PATH = REPORT_DIR / "coord_report.json"
+except Exception:
+    REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    REPORT_PATH = REPORT_DIR / "coord_report.json"
 
 
 if not OPENAI_API_KEY:
@@ -152,12 +158,7 @@ async def register_self():
     ]
     for payload in payloads:
         try:
-            r = requests.post(
-                f"{REGISTRY_URL}/register",
-                json=payload,
-                timeout=30,
-                proxies={"http": None, "https": None},
-            )
+            r = requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=10)
             r.raise_for_status()
             print(f"Buyer agent registered successfully: {payload['agent_id']}")
         except Exception as e:
