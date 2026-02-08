@@ -2,7 +2,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict
 from dotenv import load_dotenv
-from embedder import embed_text, flatten_metadata
+try:
+    from .embedder import embed_text, flatten_metadata
+except ImportError:
+    from embedder import embed_text, flatten_metadata
 import numpy as np
 
 load_dotenv()
