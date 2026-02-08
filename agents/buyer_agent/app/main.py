@@ -30,7 +30,7 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 class IntentRequest(BaseModel):
     intent: str                    
-    region: str = "NG"              
+    region: str | None = None              
     quantity: int | None = None
     origin: str | None = None
     destination: str | None = None
@@ -175,6 +175,7 @@ async def execute_intent(req: IntentRequest):
 
     try:
         # Fill missing fields from intent text
+        region = req.region or "NG"
         extracted = _extract_intent_fields(req.intent)
         part = extracted.get("part") or "wheels"
         quantity = req.quantity or extracted.get("quantity") or 50
@@ -184,11 +185,12 @@ async def execute_intent(req: IntentRequest):
         report["quantity"] = quantity
         report["origin"] = origin
         report["destination"] = destination
+        report["region"] = region
 
 
         # ── 1. Semantic discovery ────────────────────────────────────────
         print("[buyer] starting discovery")
-        supplier_params = {"q": f"{req.intent} supplier", "region": req.region}
+        supplier_params = {"q": f"{req.intent} supplier", "region": region}
         suppliers = requests.get(
             f"{REGISTRY_URL}/discover",
             params=supplier_params,
@@ -201,7 +203,7 @@ async def execute_intent(req: IntentRequest):
             print("[buyer] no suppliers found, invoking LLM parser")
             fallback_query = _extract_supplier_query(req.intent)
             print(f"[buyer] fallback supplier query: {fallback_query}")
-            supplier_params = {"q": fallback_query, "region": req.region}
+            supplier_params = {"q": fallback_query, "region": region}
             suppliers = requests.get(
                 f"{REGISTRY_URL}/discover",
                 params=supplier_params,
@@ -215,7 +217,7 @@ async def execute_intent(req: IntentRequest):
         report["discovery_paths"].append(suppliers[0])
         supplier_endpoint = suppliers[0]["endpoint"] + "/request"
 
-        logi_params = {"q": "logistics provider", "region": req.region}
+        logi_params = {"q": "logistics provider", "region": region}
         logistics_agents = requests.get(
             f"{REGISTRY_URL}/discover",
             params=logi_params,
@@ -324,7 +326,7 @@ async def execute_intent(req: IntentRequest):
 
         # ── 6. Finalize report ───────────────────────────────────────────────
         report["verification_logic"] = ["Semantic discovery with cosine + policy filter", "LLM-based decision in agents"]
-        report["policy_enforcement"] = [f"Region restricted to {req.region}", "Compliance agent verified offer & route"]
+        report["policy_enforcement"] = [f"Region restricted to {region}", "Compliance agent verified offer & route"]
         logistics_details = logistics_resp.get("details") if isinstance(logistics_resp, dict) else {}
         if not isinstance(logistics_details, dict):
             logistics_details = {}
