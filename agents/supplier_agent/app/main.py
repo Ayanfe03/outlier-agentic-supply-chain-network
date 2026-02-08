@@ -13,9 +13,8 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI(title="Supplier Agent")
 
-# REGISTRY_URL = "http://registry:8000"
-
-REGISTRY_URL = "http://localhost:8000"
+REGISTRY_URL = os.getenv("REGISTRY_URL", "http://localhost:8000")
+ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8001")
 
 class Request(BaseModel):
     part: str
@@ -28,8 +27,7 @@ async def register_self():
             "agent_id": "supplier-1",
             "role": "Supplier",
             "capabilities": {"parts": ["wheels", "tires", "engines"]},
-            # "endpoint": "http://supplier:8001",
-            "endpoint": "http://localhost:8001",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "NG", "compliance": "basic"},
             "jurisdiction": {
                 "country": "Nigeria",
@@ -42,7 +40,7 @@ async def register_self():
             "agent_id": "supplier-2",
             "role": "Supplier",
             "capabilities": {"parts": ["sensors", "electronics", "control units"]},
-            "endpoint": "http://localhost:8001",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "EU", "compliance": "strict"},
             "jurisdiction": {
                 "country": "Germany",
@@ -55,7 +53,7 @@ async def register_self():
             "agent_id": "supplier-3",
             "role": "Supplier",
             "capabilities": {"parts": ["steel", "aluminum", "fasteners"]},
-            "endpoint": "http://localhost:8001",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "US", "compliance": "standard"},
             "jurisdiction": {
                 "country": "United States",

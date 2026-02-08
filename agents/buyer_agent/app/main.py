@@ -13,8 +13,9 @@ load_dotenv()
 
 app = FastAPI(title="Buyer / Procurement Agent")
 
-#REGISTRY_URL = "http://registry:8000"
-REGISTRY_URL = "http://localhost:8000"
+REGISTRY_URL = os.getenv("REGISTRY_URL", "http://localhost:8000")
+ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8002")
+COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", "http://localhost:8004")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
@@ -113,8 +114,7 @@ async def register_self():
             "agent_id": "buyer-1",
             "role": "Procurement",
             "capabilities": {"actions": ["orchestrate", "procure", "coordinate", "retry"]},
-            #"endpoint": "http://buyer:8002",
-            "endpoint": "http://localhost:8002",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "NG", "compliance_required": "high", "resilience": "enabled"},
             "jurisdiction": {
                 "country": "Nigeria",
@@ -127,7 +127,7 @@ async def register_self():
             "agent_id": "buyer-2",
             "role": "Procurement",
             "capabilities": {"actions": ["orchestrate", "procure", "coordinate"]},
-            "endpoint": "http://localhost:8002",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "EU", "compliance_required": "high", "resilience": "enabled"},
             "jurisdiction": {
                 "country": "Germany",
@@ -140,7 +140,7 @@ async def register_self():
             "agent_id": "buyer-3",
             "role": "Procurement",
             "capabilities": {"actions": ["orchestrate", "procure", "coordinate"]},
-            "endpoint": "http://localhost:8002",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "US", "compliance_required": "medium", "resilience": "enabled"},
             "jurisdiction": {
                 "country": "United States",
@@ -307,8 +307,7 @@ async def execute_intent(req: IntentRequest):
 
         # ── 5. Call Compliance ───────────────────────────────────────────────
         compliance_resp = requests.post(
-            #"http://compliance:8004/verify",
-            "http://localhost:8004/verify",
+            f"{COMPLIANCE_URL}/verify",
             json={"offer": supplier_data, "route": logistics_resp},
             timeout=45,
             proxies={"http": None, "https": None},

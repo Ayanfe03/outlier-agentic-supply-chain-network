@@ -5,6 +5,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from datetime import datetime, timezone
 from pathlib import Path
+import os
 
 st.set_page_config(page_title="Outlier Agentic Protocol", layout="wide")
 
@@ -41,8 +42,9 @@ if st.sidebar.button("Run Protocol"):
         }
         try:
             #resp = requests.post("http://buyer:8002/intent", json=payload, timeout=30)
+            buyer_url = os.getenv("BUYER_URL", "http://localhost:8002")
             resp = requests.post(
-                "http://localhost:8002/intent",
+                f"{buyer_url}/intent",
                 json=payload,
                 timeout=90,
                 proxies={"http": None, "https": None},

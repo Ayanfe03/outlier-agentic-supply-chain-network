@@ -9,8 +9,8 @@ load_dotenv()
 
 app = FastAPI(title="Logistics & Routing Agent")
 
-#REGISTRY_URL = "http://registry:8000"
-REGISTRY_URL = "http://localhost:8000"
+REGISTRY_URL = os.getenv("REGISTRY_URL", "http://localhost:8000")
+ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8003")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set in environment")
@@ -29,8 +29,7 @@ async def register_self():
             "agent_id": "logistics-1",
             "role": "LogisticsProvider",
             "capabilities": {"regions": ["NG", "West Africa"], "modes": ["road", "port", "hub"]},
-            #"endpoint": "http://logistics:8003",
-            "endpoint": "http://localhost:8003",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "NG", "lead_time_max_days": 7},
             "jurisdiction": {
                 "country": "Nigeria",
@@ -42,7 +41,7 @@ async def register_self():
             "agent_id": "logistics-2",
             "role": "LogisticsProvider",
             "capabilities": {"regions": ["EU"], "modes": ["air", "hub"]},
-            "endpoint": "http://localhost:8003",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "EU", "lead_time_max_days": 3},
             "jurisdiction": {
                 "country": "Netherlands",
@@ -54,7 +53,7 @@ async def register_self():
             "agent_id": "logistics-3",
             "role": "LogisticsProvider",
             "capabilities": {"regions": ["US"], "modes": ["rail", "road"]},
-            "endpoint": "http://localhost:8003",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "US", "lead_time_max_days": 5},
             "jurisdiction": {
                 "country": "United States",

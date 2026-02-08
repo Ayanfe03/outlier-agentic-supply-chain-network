@@ -10,8 +10,8 @@ load_dotenv()
 
 app = FastAPI(title="Compliance & Verification Agent")
 
-#REGISTRY_URL = "http://registry:8000"
-REGISTRY_URL = "http://localhost:8000"
+REGISTRY_URL = os.getenv("REGISTRY_URL", "http://localhost:8000")
+ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8004")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set in environment")
@@ -29,8 +29,7 @@ async def register_self():
             "agent_id": "compliance-1",
             "role": "ComplianceAgent",
             "capabilities": {"checks": ["policy", "region", "trade_compliance", "esg"]},
-            #"endpoint": "http://compliance:8004",
-            "endpoint": "http://localhost:8004",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "NG", "enforce_level": "strict"},
             "jurisdiction": {
                 "country": "Nigeria",
@@ -43,7 +42,7 @@ async def register_self():
             "agent_id": "compliance-2",
             "role": "ComplianceAgent",
             "capabilities": {"checks": ["policy", "region", "trade_compliance", "esg"]},
-            "endpoint": "http://localhost:8004",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "EU", "enforce_level": "strict"},
             "jurisdiction": {
                 "country": "Germany",
@@ -56,7 +55,7 @@ async def register_self():
             "agent_id": "compliance-3",
             "role": "ComplianceAgent",
             "capabilities": {"checks": ["policy", "region", "trade_compliance", "esg"]},
-            "endpoint": "http://localhost:8004",
+            "endpoint": ENDPOINT_URL,
             "policies": {"region": "US", "enforce_level": "moderate"},
             "jurisdiction": {
                 "country": "United States",

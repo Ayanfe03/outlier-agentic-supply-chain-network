@@ -1,0 +1,87 @@
+services:
+  - type: web
+    name: registry
+    env: docker
+    repo: https://github.com/Ayanfe03/outlier-agentic-supply-chain-network
+    region: oregon
+    plan: free
+    dockerfilePath: registry/Dockerfile
+    autoDeploy: true
+
+  - type: web
+    name: buyer
+    env: docker
+    repo: https://github.com/Ayanfe03/outlier-agentic-supply-chain-network
+    region: oregon
+    plan: free
+    dockerfilePath: agents/buyer_agent/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: REGISTRY_URL
+        sync: false
+      - key: COMPLIANCE_URL
+        sync: false
+      - key: ENDPOINT_URL
+        sync: false
+
+  - type: web
+    name: supplier
+    env: docker
+    repo: https://github.com/Ayanfe03/outlier-agentic-supply-chain-network
+    region: oregon
+    plan: free
+    dockerfilePath: agents/supplier_agent/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: REGISTRY_URL
+        sync: false
+      - key: ENDPOINT_URL
+        sync: false
+
+  - type: web
+    name: logistics
+    env: docker
+    repo: https://github.com/Ayanfe03/outlier-agentic-supply-chain-network
+    region: oregon
+    plan: free
+    dockerfilePath: agents/logistics_agent/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: REGISTRY_URL
+        sync: false
+      - key: ENDPOINT_URL
+        sync: false
+
+  - type: web
+    name: compliance
+    env: docker
+    repo: https://github.com/Ayanfe03/outlier-agentic-supply-chain-network
+    region: oregon
+    plan: free
+    dockerfilePath: agents/compliance_agent/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: REGISTRY_URL
+        sync: false
+      - key: ENDPOINT_URL
+        sync: false
+
+  - type: web
+    name: dashboard
+    env: docker
+    repo: https://github.com/Ayanfe03/outlier-agentic-supply-chain-network
+    region: oregon
+    plan: free
+    dockerfilePath: dashboard/Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: BUYER_URL
+        sync: false
