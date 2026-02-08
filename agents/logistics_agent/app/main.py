@@ -64,7 +64,12 @@ async def register_self():
     ]
     for payload in payloads:
         try:
-            requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=8)
+            requests.post(
+                f"{REGISTRY_URL}/register",
+                json=payload,
+                timeout=30,
+                proxies={"http": None, "https": None},
+            )
             print(f"Logistics agent registered successfully: {payload['agent_id']}")
         except Exception as e:
             print(f"Registration failed for {payload['agent_id']}: {e}")

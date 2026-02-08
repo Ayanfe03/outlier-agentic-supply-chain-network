@@ -152,7 +152,12 @@ async def register_self():
     ]
     for payload in payloads:
         try:
-            r = requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=10)
+            r = requests.post(
+                f"{REGISTRY_URL}/register",
+                json=payload,
+                timeout=30,
+                proxies={"http": None, "https": None},
+            )
             r.raise_for_status()
             print(f"Buyer agent registered successfully: {payload['agent_id']}")
         except Exception as e:
