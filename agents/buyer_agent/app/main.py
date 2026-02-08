@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import random
 from datetime import datetime
-from groq import Groq
+import openai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,17 +15,20 @@ app = FastAPI(title="Buyer / Procurement Agent")
 
 #REGISTRY_URL = "http://registry:8000"
 REGISTRY_URL = "http://localhost:8000"
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+ASI_API_KEY = os.getenv("ASI_API_KEY")
 
 REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH = REPORT_DIR / "coord_report.json"
 
 
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY not set in environment")
+if not ASI_API_KEY:
+    raise ValueError("ASI_API_KEY not set in environment")
 
-client = Groq(api_key=GROQ_API_KEY)
+client = openai.OpenAI(
+    api_key=ASI_API_KEY,
+    base_url="https://inference.asicloud.cudos.org/v1",
+)
 
 class IntentRequest(BaseModel):
     intent: str                     # e.g. "Buy 100 wheels for Ferrari assembly"
@@ -51,7 +54,7 @@ def _extract_supplier_query(intent: str) -> str:
     )
     try:
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="gpt-oss-20b",
             messages=[
                 {"role": "system", "content": "You extract concise supplier search queries."},
                 {"role": "user", "content": f"Intent: {intent}\n{prompt}"},
