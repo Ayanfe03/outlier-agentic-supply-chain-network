@@ -1,10 +1,18 @@
-from sentence_transformers import SentenceTransformer
-import numpy as np
+import os
+from openai import OpenAI
+from dotenv import load_dotenv
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-def embed_text(text: str) -> np.ndarray:
-    return model.encode(text, convert_to_numpy=True)
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+def embed_text(text: str):
+    resp = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=text
+    )
+    return resp.data[0].embedding
 
 def flatten_metadata(role: str, cap: dict, pol: dict, jur: dict) -> str:
     parts = [f"role: {role}"]

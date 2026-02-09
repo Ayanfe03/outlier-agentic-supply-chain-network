@@ -67,16 +67,11 @@ async def register_self():
     ]
     for payload in payloads:
         try:
-            requests.post(
-                f"{REGISTRY_URL}/register",
-                json=payload,
-                timeout=30,
-                proxies={"http": None, "https": None},
-            )
+            r = requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=10)
+            r.raise_for_status()
             print(f"Compliance agent registered successfully: {payload['agent_id']}")
         except Exception as e:
-            print(f"Registration failed for {payload['agent_id']}: {e}")
-
+            print(f"Compliance registration failed for {payload['agent_id']}: {e}")
 @app.post("/verify")
 def verify_compliance(check: ComplianceCheck):
     prompt = f"""You are a strict compliance verification agent in Nigeria.

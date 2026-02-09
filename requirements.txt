@@ -6,6 +6,5 @@ matplotlib==3.10.0
 streamlit==1.42.0
 requests==2.32.3
 python-dotenv==1.0.1
-sentence-transformers==3.4.1
 numpy>=2.1.0
 openai~=1.83.0

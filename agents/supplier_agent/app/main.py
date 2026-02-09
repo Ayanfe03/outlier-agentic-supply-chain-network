@@ -65,15 +65,11 @@ async def register_self():
     ]
     for payload in payloads:
         try:
-            requests.post(
-                f"{REGISTRY_URL}/register",
-                json=payload,
-                timeout=30,
-                proxies={"http": None, "https": None},
-            )
+            r = requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=10)
+            r.raise_for_status()
             print(f"Supplier agent registered successfully: {payload['agent_id']}")
         except Exception as e:
-            print(f"Registry not ready for {payload['agent_id']} - retry later: {e}")
+            print(f"Supplier registration failed for {payload['agent_id']}: {e}")
 
 @app.post("/request")
 def handle_request(req: Request):

@@ -31,15 +31,11 @@ st.caption("Programmable supply-chain coordination via autonomous agent networks
 
 # Sidebar controls
 st.sidebar.header("Control Panel")
-intent = st.sidebar.text_input("Declare your procurement intent", "Buy 100 wheels for Ferrari assembly")
-region = st.sidebar.selectbox("Preferred Region", ["NG", "EU", "Any"], index=0)
+intent = st.sidebar.text_input("Declare your procurement intent", "")
 
 if st.sidebar.button("Run Protocol"):
     with st.spinner("Orchestrating decentralized agents..."):
-        payload = {
-            "intent": intent,
-            "region": region if region != "Any" else None,
-        }
+        payload = {"intent": intent}
         try:
             #resp = requests.post("http://buyer:8002/intent", json=payload, timeout=30)
             buyer_url = os.getenv("BUYER_URL", "http://localhost:8002")
@@ -53,6 +49,7 @@ if st.sidebar.button("Run Protocol"):
             result = resp.json()
             st.success("Cascade executed successfully.")
             st.session_state.last_result = result
+            st.session_state.last_report = None
         except Exception as e:
             st.error(f"Orchestration failed: {str(e)}")
 
@@ -63,7 +60,8 @@ try:
     with open(REPORT_PATH, "r") as f:
         report = json.load(f)
     st.session_state.last_report = report
-except:
+    st.caption(f"Report loaded from: {REPORT_PATH}")
+except Exception:
     report = st.session_state.get("last_report", {})
     if not report:
         st.info(f"No report generated yet. Run an intent above. (Looking for: {REPORT_PATH})")

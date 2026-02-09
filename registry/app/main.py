@@ -37,7 +37,7 @@ def register(agent: AgentRegister):
     if agent.agent_id in AGENTS:
         raise HTTPException(400, "Agent already registered")
     flat = flatten_metadata(agent.role, agent.capabilities, agent.policies, agent.jurisdiction)
-    emb = embed_text(flat).tolist()
+    emb = embed_text(flat)
     record = agent.dict()
     record["embedding"] = emb
     AGENTS[agent.agent_id] = record

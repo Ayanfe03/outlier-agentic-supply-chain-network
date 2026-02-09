@@ -64,16 +64,11 @@ async def register_self():
     ]
     for payload in payloads:
         try:
-            requests.post(
-                f"{REGISTRY_URL}/register",
-                json=payload,
-                timeout=30,
-                proxies={"http": None, "https": None},
-            )
+            r = requests.post(f"{REGISTRY_URL}/register", json=payload, timeout=10)
+            r.raise_for_status()
             print(f"Logistics agent registered successfully: {payload['agent_id']}")
         except Exception as e:
-            print(f"Registration failed for {payload['agent_id']}: {e}")
-
+            print(f"Logistics registration failed for {payload['agent_id']}: {e}")
 @app.post("/route")
 def propose_route(req: RouteRequest):
     prompt = f"""You are a logistics routing agent based in Lagos, Nigeria.

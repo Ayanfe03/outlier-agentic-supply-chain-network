@@ -19,14 +19,12 @@ COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", "http://localhost:8004")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
-try:
-    REPORT_DIR = Path(os.getenv("REPORT_DIR", "/reports"))
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH = REPORT_DIR / "coord_report.json"
-except Exception:
-    REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH = REPORT_DIR / "coord_report.json"
+REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
+REPORT_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_PATH = REPORT_DIR / "coord_report.json"
+print(f"[buyer] report path: {REPORT_PATH}")
+
+
 
 
 if not OPENAI_API_KEY:
