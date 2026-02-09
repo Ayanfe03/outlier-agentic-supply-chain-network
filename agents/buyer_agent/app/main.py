@@ -10,6 +10,7 @@ from datetime import datetime
 import openai
 from dotenv import load_dotenv
 from typing import List, Dict, Any
+import anyio
 
 load_dotenv()
 
@@ -51,6 +52,20 @@ class IntentRequest(BaseModel):
     quantity: int | None = None
     origin: str | None = None
     destination: str | None = None
+
+async def _get_json(url: str, **kwargs):
+    def _do():
+        resp = requests.get(url, **kwargs)
+        resp.raise_for_status()
+        return resp.json()
+    return await anyio.to_thread.run_sync(_do)
+
+async def _post_json(url: str, **kwargs):
+    def _do():
+        resp = requests.post(url, **kwargs)
+        resp.raise_for_status()
+        return resp.json()
+    return await anyio.to_thread.run_sync(_do)
 
 class ConnectionManager:
     def __init__(self):
@@ -302,12 +317,12 @@ async def execute_intent(req: IntentRequest):
         supplier_query = f"{part} supplier"
         await _emit_step("buyer-1", "buyer", "discover_suppliers", f"query: {supplier_query}")
         supplier_params = {"q": supplier_query, "region": region}
-        suppliers = requests.get(
+        suppliers = await _get_json(
             f"{REGISTRY_URL}/discover",
             params=supplier_params,
             timeout=30,
             proxies={"http": None, "https": None},
-        ).json()
+        )
         print(f"[buyer] primary supplier results: {len(suppliers) if isinstance(suppliers, list) else suppliers}")
 
         if suppliers:
@@ -318,12 +333,12 @@ async def execute_intent(req: IntentRequest):
             print(f"[buyer] fallback supplier query: {fallback_query}")
             await _emit_step("buyer-1", "buyer", "discover_suppliers_fallback", f"query: {fallback_query}")
             supplier_params = {"q": fallback_query, "region": region}
-            suppliers = requests.get(
+            suppliers = await _get_json(
                 f"{REGISTRY_URL}/discover",
                 params=supplier_params,
                 timeout=30,
                 proxies={"http": None, "https": None},
-            ).json()
+            )
             print(f"[buyer] fallback supplier results: {len(suppliers) if isinstance(suppliers, list) else suppliers}")
             if suppliers:
                 suppliers = [s for s in suppliers if _matches_part(s, part)]
@@ -336,12 +351,12 @@ async def execute_intent(req: IntentRequest):
         await _emit_phase(suppliers[0]["agent_id"], "supplier", "request_parts")
 
         logi_params = {"q": "logistics provider", "region": region}
-        logistics_agents = requests.get(
+        logistics_agents = await _get_json(
             f"{REGISTRY_URL}/discover",
             params=logi_params,
             timeout=30,
             proxies={"http": None, "https": None},
-        ).json()
+        )
         if not logistics_agents:
             raise ValueError("No logistics providers found")
         report["discovery_paths"].append(logistics_agents[0])
@@ -361,14 +376,12 @@ async def execute_intent(req: IntentRequest):
                         f"Simulated disruption: supplier timeout / port closure / inventory issue"
                     )
 
-                supplier_resp = requests.post(
+                supplier_data = await _post_json(
                     supplier_endpoint,
                     json={"part": part, "quantity": quantity},
                     timeout=12,
                     proxies={"http": None, "https": None},
                 )
-                supplier_resp.raise_for_status()
-                supplier_data = supplier_resp.json()
                 print(f"[buyer] supplier details raw: {supplier_data.get('details') if isinstance(supplier_data, dict) else supplier_data}")
 
                 report["message_exchanges"].append({
@@ -390,12 +403,12 @@ async def execute_intent(req: IntentRequest):
                     raise HTTPException(503, "Supplier unavailable after retries")
 
                 # Rediscover alternative
-                new_suppliers = requests.get(
+                new_suppliers = await _get_json(
                     f"{REGISTRY_URL}/discover",
                     params=supplier_params,
                     timeout=30,
                     proxies={"http": None, "https": None},
-                ).json()
+                )
                 if not new_suppliers or new_suppliers[0]["agent_id"] == selected_supplier["agent_id"]:
                     report["message_exchanges"].append({"note": "No better alternative found"})
                     continue
@@ -412,12 +425,12 @@ async def execute_intent(req: IntentRequest):
                 await _emit_step(selected_supplier["agent_id"], "supplier", "supplier_switched", "fallback after disruption")
 
         # ── 4. Call Logistics ────────────────────────────────────────────────
-        logistics_resp = requests.post(
+        logistics_resp = await _post_json(
             logistics_endpoint,
             json={"origin": origin, "destination": destination, "quantity": quantity, "part": part},
             timeout=45,
             proxies={"http": None, "https": None},
-        ).json()
+        )
         if isinstance(logistics_resp, dict):
             logistics_resp["details"] = _parse_json_maybe(logistics_resp.get("details"))
         print(f"[buyer] logistics details raw: {logistics_resp.get('details') if isinstance(logistics_resp, dict) else logistics_resp}")
@@ -431,12 +444,12 @@ async def execute_intent(req: IntentRequest):
         await _emit_step(logistics_agents[0]["agent_id"], "logistics", "request_routing", str(logistics_resp.get("details", ""))[:160])
 
         # ── 5. Call Compliance ───────────────────────────────────────────────
-        compliance_resp = requests.post(
+        compliance_resp = await _post_json(
             f"{COMPLIANCE_URL}/verify",
             json={"offer": supplier_data, "route": logistics_resp},
             timeout=45,
             proxies={"http": None, "https": None},
-        ).json()
+        )
         await _emit_phase("compliance-1", "compliance", "verify_compliance")
         if isinstance(compliance_resp, dict):
             compliance_resp["result"] = _parse_json_maybe(compliance_resp.get("result"))

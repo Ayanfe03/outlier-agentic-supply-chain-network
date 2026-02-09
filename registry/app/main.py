@@ -59,7 +59,7 @@ def register(agent: AgentRegister):
     return AgentOut(**agent.dict(), match_score=1.0)
 
 @app.get("/discover", response_model=List[AgentOut])
-def discover(q: str = "", region: str = None):
+def discover(q: str = "", region: str = None, compliance: str = None, policy: str = None):
     if not q: return []
     query_emb = embed_text(q)
     agents = list(AGENTS.values())
@@ -75,6 +75,20 @@ def discover(q: str = "", region: str = None):
         score = float(similarity)
         if region and a.get("policies", {}).get("region") != region:
             score *= 0.3
+        if compliance:
+            standards = a.get("jurisdiction", {}).get("compliance_standards", [])
+            standards_lc = [str(s).lower() for s in standards]
+            if compliance.lower() not in standards_lc:
+                continue
+        if policy:
+            policies = a.get("policies", {})
+            pol_hit = False
+            for k, v in policies.items():
+                if policy.lower() in str(k).lower() or policy.lower() in str(v).lower():
+                    pol_hit = True
+                    break
+            if not pol_hit:
+                continue
         if score >= 0.35:
             results.append(AgentOut(**a, match_score=round(score, 3)))
     # Lexical fallback if semantic search returns nothing
@@ -82,6 +96,20 @@ def discover(q: str = "", region: str = None):
         for a in agents:
             if region and a.get("policies", {}).get("region") != region:
                 continue
+            if compliance:
+                standards = a.get("jurisdiction", {}).get("compliance_standards", [])
+                standards_lc = [str(s).lower() for s in standards]
+                if compliance.lower() not in standards_lc:
+                    continue
+            if policy:
+                policies = a.get("policies", {})
+                pol_hit = False
+                for k, v in policies.items():
+                    if policy.lower() in str(k).lower() or policy.lower() in str(v).lower():
+                        pol_hit = True
+                        break
+                if not pol_hit:
+                    continue
             role = a.get("role")
             role_match = role and role.lower() in q_lc
             # Check capabilities values for lexical hits

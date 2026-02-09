@@ -4,6 +4,7 @@ import IntentInput from "@/components/IntentInput";
 import CoordinationFlow from "@/components/CoordinationFlow";
 import SupplyGraph from "@/components/SupplyGraph";
 import AgentInteraction from "@/components/AgentInteraction";
+import LiveMessageStream from "@/components/LiveMessageStream";
 import { apiService, getBuyerWsUrl } from "@/services/api";
 import type { CoordinationReport, AgentFact } from "@/types/protocol";
 
@@ -13,16 +14,9 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const liveRef = useRef(false);
-  const [livePhase, setLivePhase] = useState<{
-    agentName?: string;
-    agentRole?: string;
-    action?: string;
-  } | null>(null);
-  const [liveStep, setLiveStep] = useState<{
-    agentName?: string;
-    agentRole?: string;
-    action?: string;
-  } | null>(null);
+  const [eventLog, setEventLog] = useState<
+    { id: string; type: string; actor: string; action: string; message: string; ts: string }[]
+  >([]);
 
   useEffect(() => {
     apiService.getAgents().then(setAgents).catch(() => setAgents([]));
@@ -31,8 +25,7 @@ const Index = () => {
   const handleSubmitIntent = async (intent: string) => {
     setIsProcessing(true);
     liveRef.current = false;
-    setLivePhase({ agentName: "buyer-1", agentRole: "buyer", action: "orchestrate" });
-    setLiveStep(null);
+    setEventLog([]);
     setReport({ id: "", intent, status: "running", steps: [], createdAt: new Date().toISOString() });
 
     try {
@@ -52,16 +45,17 @@ const Index = () => {
           const data = JSON.parse(event.data);
           if (data.type === "step" && data.step) {
             liveRef.current = true;
-            setLivePhase({
-              agentName: data.step.agentName,
-              agentRole: data.step.agentRole,
-              action: data.step.action,
-            });
-            setLiveStep({
-              agentName: data.step.agentName,
-              agentRole: data.step.agentRole,
-              action: data.step.action,
-            });
+            setEventLog((prev) => [
+              ...prev,
+              {
+                id: `log-${Date.now()}-${prev.length}`,
+                type: "step",
+                actor: data.step.agentName || data.step.agentId || "agent",
+                action: data.step.action || "action",
+                message: data.step.result || "",
+                ts: data.step.timestamp || new Date().toISOString(),
+              },
+            ]);
             setReport((prev) => {
               const next = prev || {
                 id: `live-${Date.now()}`,
@@ -89,14 +83,18 @@ const Index = () => {
               };
             });
           }
-          if (data.type === "phase" && data.phase) {
-            setLivePhase({
-              agentName: data.phase.agentName,
-              agentRole: data.phase.agentRole,
-              action: data.phase.action,
-            });
-          }
           if (data.type === "status") {
+            setEventLog((prev) => [
+              ...prev,
+              {
+                id: `log-${Date.now()}-${prev.length}`,
+                type: "status",
+                actor: "system",
+                action: data.status || "status",
+                message: data.intent || "",
+                ts: new Date().toISOString(),
+              },
+            ]);
             setReport((prev) => (prev ? { ...prev, status: data.status } : prev));
           }
         } catch {
@@ -143,8 +141,6 @@ const Index = () => {
         wsRef.current.close();
         wsRef.current = null;
       }
-      setLivePhase(null);
-      setLiveStep(null);
       setIsProcessing(false);
     }
   };
@@ -161,14 +157,13 @@ const Index = () => {
 
         {/* Live Interaction + Coordination + Graph */}
         <section className="pb-4">
-          <AgentInteraction
-            report={report}
-            isRunning={isProcessing || report?.status === "running"}
-            currentPhase={liveStep || livePhase}
-          />
+          <AgentInteraction isRunning={isProcessing || report?.status === "running"} />
         </section>
         <section className="pb-16 grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <CoordinationFlow report={report} />
+          <div className="space-y-6">
+            <CoordinationFlow report={report} />
+            <LiveMessageStream events={eventLog} />
+          </div>
           <SupplyGraph report={report} />
         </section>
       </main>

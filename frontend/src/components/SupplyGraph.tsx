@@ -86,6 +86,11 @@ const SupplyGraph = ({ report }: SupplyGraphProps) => {
     return { nodes: [...stepNodes, ...facilityNodes], edges: [...stepEdges, ...facilityEdges] };
   }, [report]);
 
+  const formatLabel = (label: string) => {
+    const clean = label.replace(/\s+/g, " ").trim();
+    return clean.length > 26 ? `${clean.slice(0, 23)}...` : clean;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -135,6 +140,7 @@ const SupplyGraph = ({ report }: SupplyGraphProps) => {
           {edges.map((edge, i) => {
             const src = nodes.find((n) => n.id === edge.source)!;
             const tgt = nodes.find((n) => n.id === edge.target)!;
+            const showLabel = edge.type !== "information";
             return (
               <g key={i}>
                 <line
@@ -148,16 +154,18 @@ const SupplyGraph = ({ report }: SupplyGraphProps) => {
                   markerEnd={`url(#arrow-${edge.type})`}
                   strokeDasharray="4 3"
                 />
-                <text
-                  x={(src.x + tgt.x) / 2}
-                  y={(src.y + tgt.y) / 2 - 6}
-                  textAnchor="middle"
-                  fontSize="8"
-                  fill="hsl(215, 15%, 55%)"
-                  fontFamily="JetBrains Mono, monospace"
-                >
-                  {edge.label}
-                </text>
+                {showLabel && (
+                  <text
+                    x={(src.x + tgt.x) / 2}
+                    y={(src.y + tgt.y) / 2 - 8}
+                    textAnchor="middle"
+                    fontSize="8"
+                    fill="hsl(215, 15%, 55%)"
+                    fontFamily="JetBrains Mono, monospace"
+                  >
+                    {formatLabel(edge.label)}
+                  </text>
+                )}
               </g>
             );
           })}

@@ -16,9 +16,27 @@ const roleAccent: Record<string, string> = {
   compliance: "border-l-destructive",
 };
 
+const cleanResult = (raw: string) => {
+  let text = raw?.trim() || "";
+  if (text.startsWith("```")) {
+    text = text.replace(/^```(json)?/i, "").replace(/```$/i, "").trim();
+  }
+  let pretty = "";
+  try {
+    const parsed = JSON.parse(text);
+    pretty = JSON.stringify(parsed, null, 2);
+  } catch {
+    pretty = text;
+  }
+  const summary =
+    pretty.length > 140 ? `${pretty.slice(0, 140).replace(/\s+/g, " ")}…` : pretty;
+  return { summary, pretty };
+};
+
 const StepItem = ({ step, index }: { step: CoordinationStep; index: number }) => {
   const config = statusConfig[step.status];
   const Icon = config.icon;
+  const { summary, pretty } = cleanResult(step.result || "");
 
   return (
     <motion.div
@@ -39,7 +57,15 @@ const StepItem = ({ step, index }: { step: CoordinationStep; index: number }) =>
             )}
           </div>
           <p className="text-sm font-medium text-foreground mb-1">{step.action}</p>
-          <p className="text-xs text-muted-foreground">{step.result}</p>
+          <details className="group text-xs text-muted-foreground">
+            <summary className="cursor-pointer list-none">
+              <span className="inline-block">{summary || "Details available"}</span>
+              <span className="ml-2 text-[10px] text-primary/80 group-open:hidden">View</span>
+            </summary>
+            <pre className="mt-2 whitespace-pre-wrap text-[11px] text-muted-foreground/90 bg-secondary/40 rounded-md p-2 border border-border">
+              {pretty || "No details"}
+            </pre>
+          </details>
         </div>
       </div>
     </motion.div>
