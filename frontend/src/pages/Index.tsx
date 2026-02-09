@@ -1,0 +1,179 @@
+import { useEffect, useRef, useState } from "react";
+import StatusBar from "@/components/StatusBar";
+import IntentInput from "@/components/IntentInput";
+import CoordinationFlow from "@/components/CoordinationFlow";
+import SupplyGraph from "@/components/SupplyGraph";
+import AgentInteraction from "@/components/AgentInteraction";
+import { apiService, getBuyerWsUrl } from "@/services/api";
+import type { CoordinationReport, AgentFact } from "@/types/protocol";
+
+const Index = () => {
+  const [agents, setAgents] = useState<AgentFact[]>([]);
+  const [report, setReport] = useState<CoordinationReport | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const liveRef = useRef(false);
+  const [livePhase, setLivePhase] = useState<{
+    agentName?: string;
+    agentRole?: string;
+    action?: string;
+  } | null>(null);
+  const [liveStep, setLiveStep] = useState<{
+    agentName?: string;
+    agentRole?: string;
+    action?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    apiService.getAgents().then(setAgents).catch(() => setAgents([]));
+  }, []);
+
+  const handleSubmitIntent = async (intent: string) => {
+    setIsProcessing(true);
+    liveRef.current = false;
+    setLivePhase({ agentName: "buyer-1", agentRole: "buyer", action: "orchestrate" });
+    setLiveStep(null);
+    setReport({ id: "", intent, status: "running", steps: [], createdAt: new Date().toISOString() });
+
+    try {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      const ws = new WebSocket(getBuyerWsUrl());
+      wsRef.current = ws;
+      const wsReady = new Promise<void>((resolve) => {
+        ws.onopen = () => {
+          ws.send("subscribe");
+          resolve();
+        };
+      });
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "step" && data.step) {
+            liveRef.current = true;
+            setLivePhase({
+              agentName: data.step.agentName,
+              agentRole: data.step.agentRole,
+              action: data.step.action,
+            });
+            setLiveStep({
+              agentName: data.step.agentName,
+              agentRole: data.step.agentRole,
+              action: data.step.action,
+            });
+            setReport((prev) => {
+              const next = prev || {
+                id: `live-${Date.now()}`,
+                intent,
+                status: "running",
+                steps: [],
+                createdAt: new Date().toISOString(),
+              };
+              const stepId = data.step.id || `live-step-${next.steps.length + 1}`;
+              return {
+                ...next,
+                steps: [
+                  ...next.steps,
+                  {
+                    id: stepId,
+                    agentId: data.step.agentId,
+                    agentName: data.step.agentName,
+                    agentRole: data.step.agentRole,
+                    action: data.step.action,
+                    result: data.step.result,
+                    status: "completed",
+                    timestamp: data.step.timestamp || new Date().toISOString(),
+                  },
+                ],
+              };
+            });
+          }
+          if (data.type === "phase" && data.phase) {
+            setLivePhase({
+              agentName: data.phase.agentName,
+              agentRole: data.phase.agentRole,
+              action: data.phase.action,
+            });
+          }
+          if (data.type === "status") {
+            setReport((prev) => (prev ? { ...prev, status: data.status } : prev));
+          }
+        } catch {
+          return;
+        }
+      };
+
+      await Promise.race([
+        wsReady,
+        new Promise((resolve) => setTimeout(resolve, 800)),
+      ]);
+
+      const fullReport = await apiService.submitIntent(intent);
+      const steps = fullReport.steps;
+
+      if (!liveRef.current) {
+        for (let i = 0; i < steps.length; i++) {
+          await new Promise((r) => setTimeout(r, 600));
+          setReport((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  steps: steps.slice(0, i + 1).map((s) => ({
+                    ...s,
+                    status: "completed",
+                  })),
+                }
+              : null
+          );
+        }
+      }
+
+      setReport({ ...fullReport, intent });
+    } catch (e: any) {
+      setReport({
+        id: `error-${Date.now()}`,
+        intent,
+        status: "failed",
+        steps: [],
+        createdAt: new Date().toISOString(),
+      });
+    } finally {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      setLivePhase(null);
+      setLiveStep(null);
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <StatusBar onlineCount={agents.length} />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Hero / Intent Input */}
+        <section className="pt-16 pb-12">
+          <IntentInput onSubmit={handleSubmitIntent} isProcessing={isProcessing} />
+        </section>
+
+        {/* Live Interaction + Coordination + Graph */}
+        <section className="pb-4">
+          <AgentInteraction
+            report={report}
+            isRunning={isProcessing || report?.status === "running"}
+            currentPhase={liveStep || livePhase}
+          />
+        </section>
+        <section className="pb-16 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <CoordinationFlow report={report} />
+          <SupplyGraph report={report} />
+        </section>
+      </main>
+    </div>
+  );
+};
+
+export default Index;

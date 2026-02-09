@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 import os
@@ -8,15 +9,27 @@ import random
 from datetime import datetime
 import openai
 from dotenv import load_dotenv
+from typing import List, Dict, Any
 
 load_dotenv()
 
 app = FastAPI(title="Buyer / Procurement Agent")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 REGISTRY_URL = os.getenv("REGISTRY_URL", "http://localhost:8000")
 ENDPOINT_URL = os.getenv("ENDPOINT_URL", "http://localhost:8002")
 COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", "http://localhost:8004")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+try:
+    FX_NGN_USD = float(os.getenv("FX_NGN_USD", "0.00065"))
+except Exception:
+    FX_NGN_USD = 0.00065
 
 
 REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
@@ -39,6 +52,39 @@ class IntentRequest(BaseModel):
     origin: str | None = None
     destination: str | None = None
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: Dict[str, Any]):
+        dead = []
+        for ws in self.active_connections:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
 def _parse_json_maybe(value):
     if isinstance(value, str):
         cleaned = value.strip()
@@ -60,6 +106,25 @@ def _parse_json_maybe(value):
         except Exception:
             return value
     return value
+
+def _extract_unit_price_from_notes(notes: str):
+    if not isinstance(notes, str):
+        return None
+    import re
+    patterns = [
+        r'(?i)per unit[^0-9]*([0-9][0-9,]*)',
+        r'(?i)unit price[^0-9]*([0-9][0-9,]*)',
+        r'(?i)price per unit[^0-9]*([0-9][0-9,]*)',
+        r'(?i)(?:ngn|₦)\s*([0-9][0-9,]*)\s*(?:per unit|/unit)',
+    ]
+    for pat in patterns:
+        m = re.search(pat, notes)
+        if m:
+            try:
+                return float(m.group(1).replace(",", ""))
+            except Exception:
+                return None
+    return None
 
 def _extract_supplier_query(intent: str) -> str:
     prompt = (
@@ -110,6 +175,44 @@ def _extract_intent_fields(intent: str) -> dict:
     except Exception:
         pass
     return {"part": None, "quantity": None, "origin": None, "destination": None}
+
+def _matches_part(agent: dict, part: str) -> bool:
+    try:
+        caps = agent.get("capabilities", {})
+        parts = caps.get("parts", [])
+        part_lower = part.lower()
+        return any(part_lower in str(p).lower() for p in parts)
+    except Exception:
+        return False
+
+async def _emit_step(agent_id: str, role: str, action: str, result: str):
+    await manager.broadcast(
+        {
+            "type": "step",
+            "step": {
+                "agentId": agent_id,
+                "agentName": agent_id,
+                "agentRole": role,
+                "action": action,
+                "result": result,
+                "status": "completed",
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        }
+    )
+
+async def _emit_phase(agent_id: str, role: str, action: str):
+    await manager.broadcast(
+        {
+            "type": "phase",
+            "phase": {
+                "agentId": agent_id,
+                "agentName": agent_id,
+                "agentRole": role,
+                "action": action,
+            },
+        }
+    )
 
 @app.on_event("startup")
 async def register_self():
@@ -178,6 +281,8 @@ async def execute_intent(req: IntentRequest):
     }
 
     try:
+        await manager.broadcast({"type": "status", "status": "running", "intent": req.intent})
+        await _emit_phase("buyer-1", "buyer", "orchestrate")
         # Fill missing fields from intent text
         region = req.region or "NG"
         extracted = _extract_intent_fields(req.intent)
@@ -194,7 +299,9 @@ async def execute_intent(req: IntentRequest):
 
         # ── 1. Semantic discovery ────────────────────────────────────────
         print("[buyer] starting discovery")
-        supplier_params = {"q": f"{req.intent} supplier", "region": region}
+        supplier_query = f"{part} supplier"
+        await _emit_step("buyer-1", "buyer", "discover_suppliers", f"query: {supplier_query}")
+        supplier_params = {"q": supplier_query, "region": region}
         suppliers = requests.get(
             f"{REGISTRY_URL}/discover",
             params=supplier_params,
@@ -203,10 +310,13 @@ async def execute_intent(req: IntentRequest):
         ).json()
         print(f"[buyer] primary supplier results: {len(suppliers) if isinstance(suppliers, list) else suppliers}")
 
+        if suppliers:
+            suppliers = [s for s in suppliers if _matches_part(s, part)]
         if not suppliers:
             print("[buyer] no suppliers found, invoking LLM parser")
             fallback_query = _extract_supplier_query(req.intent)
             print(f"[buyer] fallback supplier query: {fallback_query}")
+            await _emit_step("buyer-1", "buyer", "discover_suppliers_fallback", f"query: {fallback_query}")
             supplier_params = {"q": fallback_query, "region": region}
             suppliers = requests.get(
                 f"{REGISTRY_URL}/discover",
@@ -215,11 +325,15 @@ async def execute_intent(req: IntentRequest):
                 proxies={"http": None, "https": None},
             ).json()
             print(f"[buyer] fallback supplier results: {len(suppliers) if isinstance(suppliers, list) else suppliers}")
+            if suppliers:
+                suppliers = [s for s in suppliers if _matches_part(s, part)]
         if not suppliers:
             raise ValueError("No suppliers found matching intent and region")
 
         report["discovery_paths"].append(suppliers[0])
         supplier_endpoint = suppliers[0]["endpoint"] + "/request"
+        await _emit_step(suppliers[0]["agent_id"], "supplier", "supplier_selected", "selected for request")
+        await _emit_phase(suppliers[0]["agent_id"], "supplier", "request_parts")
 
         logi_params = {"q": "logistics provider", "region": region}
         logistics_agents = requests.get(
@@ -232,6 +346,8 @@ async def execute_intent(req: IntentRequest):
             raise ValueError("No logistics providers found")
         report["discovery_paths"].append(logistics_agents[0])
         logistics_endpoint = logistics_agents[0]["endpoint"] + "/route"
+        await _emit_step(logistics_agents[0]["agent_id"], "logistics", "logistics_selected", "selected for routing")
+        await _emit_phase(logistics_agents[0]["agent_id"], "logistics", "request_routing")
 
         # ── 3. Call Supplier with disruption simulation & retry ───────────────
         disruption_occurred = False
@@ -261,6 +377,7 @@ async def execute_intent(req: IntentRequest):
                     "intent": "request_parts",
                     "response": supplier_data
                 })
+                await _emit_step(selected_supplier["agent_id"], "supplier", "request_parts", str(supplier_data.get("details", ""))[:160])
                 break
 
             except Exception as exc:
@@ -292,6 +409,7 @@ async def execute_intent(req: IntentRequest):
                 report["message_exchanges"].append({
                     "resolution": f"Switched to alternative supplier: {selected_supplier['agent_id']}"
                 })
+                await _emit_step(selected_supplier["agent_id"], "supplier", "supplier_switched", "fallback after disruption")
 
         # ── 4. Call Logistics ────────────────────────────────────────────────
         logistics_resp = requests.post(
@@ -310,6 +428,7 @@ async def execute_intent(req: IntentRequest):
             "intent": "request_routing",
             "response": logistics_resp
         })
+        await _emit_step(logistics_agents[0]["agent_id"], "logistics", "request_routing", str(logistics_resp.get("details", ""))[:160])
 
         # ── 5. Call Compliance ───────────────────────────────────────────────
         compliance_resp = requests.post(
@@ -318,6 +437,7 @@ async def execute_intent(req: IntentRequest):
             timeout=45,
             proxies={"http": None, "https": None},
         ).json()
+        await _emit_phase("compliance-1", "compliance", "verify_compliance")
         if isinstance(compliance_resp, dict):
             compliance_resp["result"] = _parse_json_maybe(compliance_resp.get("result"))
 
@@ -327,6 +447,7 @@ async def execute_intent(req: IntentRequest):
             "intent": "verify_compliance",
             "response": compliance_resp
         })
+        await _emit_step("compliance-1", "compliance", "verify_compliance", str(compliance_resp.get("result", ""))[:160])
 
         # ── 6. Finalize report ───────────────────────────────────────────────
         report["verification_logic"] = ["Semantic discovery with cosine + policy filter", "LLM-based decision in agents"]
@@ -339,10 +460,25 @@ async def execute_intent(req: IntentRequest):
         if not isinstance(supplier_details, dict):
             supplier_details = {}
         offer_price = supplier_details.get("offer_price")
+        notes = supplier_details.get("notes", "")
+        unit_price = _extract_unit_price_from_notes(notes)
         lead_days = supplier_details.get("lead_days")
         estimated_cost = None
-        if isinstance(offer_price, (int, float)):
-            estimated_cost = offer_price * quantity
+        total_cost_ngn = None
+        if isinstance(unit_price, (int, float)):
+            estimated_cost = unit_price * quantity
+            total_cost_ngn = estimated_cost
+        elif isinstance(offer_price, (int, float)):
+            if isinstance(notes, str) and "per unit" in notes.lower():
+                estimated_cost = offer_price * quantity
+                total_cost_ngn = estimated_cost
+            else:
+                estimated_cost = offer_price
+                total_cost_ngn = estimated_cost
+        log_cost = logistics_details.get("estimated_cost_ngn")
+        if isinstance(log_cost, (int, float)):
+            total_cost_ngn = (total_cost_ngn or 0) + log_cost
+        total_cost_usd = round(total_cost_ngn * FX_NGN_USD, 2) if isinstance(total_cost_ngn, (int, float)) else None
 
         lead_time_days = None
         try:
@@ -356,9 +492,12 @@ async def execute_intent(req: IntentRequest):
         except Exception:
             lead_time_days = None
 
+        total_cost_display = total_cost_usd if (region == "NG" and total_cost_usd is not None) else estimated_cost
         report["final_plan"] = {
             "status": compliance_resp.get("status", "pending"),
-            "total_cost_estimate": estimated_cost if estimated_cost is not None else "N/A",
+            "total_cost_estimate": total_cost_display if total_cost_display is not None else "N/A",
+            "total_cost_ngn": total_cost_ngn if total_cost_ngn is not None else "N/A",
+            "total_cost_usd": total_cost_usd if total_cost_usd is not None else "N/A",
             "lead_time_days": lead_time_days if lead_time_days is not None else "N/A",
             "route": logistics_details.get("route", "Lagos -> Ota"),
             "supplier_used": selected_supplier["agent_id"],
@@ -370,7 +509,8 @@ async def execute_intent(req: IntentRequest):
             json.dump(report, f, indent=2)
 
         print(json.dumps(report["final_plan"], indent=2))
-        return {"status": "success", "report_summary": report["final_plan"]}
+        await manager.broadcast({"type": "status", "status": "completed"})
+        return {"status": "success", "report": report, "report_summary": report["final_plan"]}
 
     except Exception as e:
         import traceback
@@ -379,4 +519,5 @@ async def execute_intent(req: IntentRequest):
         report["error"] = str(e)
         with open(REPORT_PATH, "w") as f:
             json.dump(report, f, indent=2)
+        await manager.broadcast({"type": "status", "status": "failed", "error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))

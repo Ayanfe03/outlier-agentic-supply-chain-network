@@ -49,10 +49,19 @@ Compliance:
 uvicorn agents.compliance_agent.app.main:app --host 0.0.0.0 --port 8004
 ```
 
-Dashboard:
+### Frontend (Vite)
+From the `frontend` folder:
 ```powershell
-streamlit run dashboard/app.py
+cd frontend
+npm install
+set VITE_REGISTRY_URL=http://localhost:8000
+set VITE_BUYER_URL=http://localhost:8002
+npm run dev
 ```
+
+The frontend expects:
+- Registry: `GET /agents`
+- Buyer: `POST /intent` with `{ "intent": "..." }`
 
 ### Notes
 - The registry is in-memory. Agents re-register on startup.

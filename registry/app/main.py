@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict
 from dotenv import load_dotenv
@@ -11,6 +12,13 @@ import numpy as np
 load_dotenv()
 
 app = FastAPI(title="Agent Registry")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class AgentRegister(BaseModel):
     agent_id: str
@@ -31,6 +39,13 @@ class AgentOut(BaseModel):
 
 # In-memory registry
 AGENTS: Dict[str, Dict] = {}
+
+@app.get("/agents", response_model=List[AgentOut])
+def list_agents():
+    results = []
+    for a in AGENTS.values():
+        results.append(AgentOut(**a, match_score=0.0))
+    return results
 
 @app.post("/register", response_model=AgentOut)
 def register(agent: AgentRegister):
