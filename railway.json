@@ -1,0 +1,36 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "services": [
+    {
+      "name": "registry",
+      "rootDirectory": "registry",
+      "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    },
+    {
+      "name": "supplier",
+      "rootDirectory": "agents/supplier_agent",
+      "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    },
+    {
+      "name": "buyer",
+      "rootDirectory": "agents/buyer_agent",
+      "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    },
+    {
+      "name": "logistics",
+      "rootDirectory": "agents/logistics_agent",
+      "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    },
+    {
+      "name": "compliance",
+      "rootDirectory": "agents/compliance_agent",
+      "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    },
+    {
+      "name": "frontend",
+      "rootDirectory": "frontend",
+      "buildCommand": "npm install && npm run build",
+      "startCommand": "npm run preview -- --host 0.0.0.0 --port $PORT"
+    }
+  ]
+}
