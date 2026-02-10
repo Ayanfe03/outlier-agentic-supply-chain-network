@@ -74,6 +74,27 @@ const AgentCard = ({ agent, index }: AgentCardProps) => {
               </span>
             ))}
           </div>
+          {agent.inventory && agent.inventory.length > 0 && (
+            <div className="mt-2 space-y-1">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+                Inventory
+              </p>
+              <div className="space-y-1">
+                {agent.inventory.slice(0, 3).map((item) => (
+                  <div
+                    key={`${agent.id}-${item.part}`}
+                    className="text-[11px] text-foreground/80 flex items-center justify-between"
+                  >
+                    <span className="font-mono">{item.part}</span>
+                    <span className="font-mono text-muted-foreground">
+                      {item.available} @ {item.unitPrice}
+                      {item.currency ? ` ${item.currency}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

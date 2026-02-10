@@ -134,6 +134,7 @@ const Index = () => {
         intent,
         status: "failed",
         steps: [],
+        summary: e?.message || "Unable to process intent",
         createdAt: new Date().toISOString(),
       });
     } finally {
@@ -162,9 +163,13 @@ const Index = () => {
         <section className="pb-16 grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-6">
             <CoordinationFlow report={report} />
-            <LiveMessageStream events={eventLog} />
           </div>
-          <SupplyGraph report={report} />
+          <div className="space-y-6">
+            <div className="mt-12">
+              <LiveMessageStream events={eventLog} />
+            </div>
+            <SupplyGraph report={report} />
+          </div>
         </section>
       </main>
     </div>

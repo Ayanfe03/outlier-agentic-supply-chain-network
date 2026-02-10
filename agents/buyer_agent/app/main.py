@@ -31,6 +31,14 @@ try:
     FX_NGN_USD = float(os.getenv("FX_NGN_USD", "0.00065"))
 except Exception:
     FX_NGN_USD = 0.00065
+try:
+    FX_EUR_USD = float(os.getenv("FX_EUR_USD", "1.08"))
+except Exception:
+    FX_EUR_USD = 1.08
+try:
+    FX_USD_USD = float(os.getenv("FX_USD_USD", "1.0"))
+except Exception:
+    FX_USD_USD = 1.0
 
 
 REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
@@ -52,6 +60,19 @@ class IntentRequest(BaseModel):
     quantity: int | None = None
     origin: str | None = None
     destination: str | None = None
+
+def _infer_region(intent: str, origin: str | None, destination: str | None) -> str | None:
+    text = f"{intent} {origin or ''} {destination or ''}".lower()
+    ng = ["nigeria", "lagos", "abuja", "kano", "ibadan", "ota", "ogun", "port harcourt"]
+    eu = ["eu", "europe", "germany", "berlin", "munich", "bavaria", "france", "paris", "netherlands", "amsterdam", "london", "uk", "united kingdom", "england", "spain", "italy"]
+    us = ["us", "usa", "united states", "america", "california", "texas", "new york", "illinois", "chicago", "michigan"]
+    if any(k in text for k in ng):
+        return "NG"
+    if any(k in text for k in eu):
+        return "EU"
+    if any(k in text for k in us):
+        return "US"
+    return None
 
 async def _get_json(url: str, **kwargs):
     def _do():
@@ -170,7 +191,7 @@ def _extract_supplier_query(intent: str) -> str:
 def _extract_intent_fields(intent: str) -> dict:
     prompt = (
         "Extract structured fields from the intent. Return JSON only:\n"
-        "{\"part\": str or null, \"quantity\": int or null, \"origin\": str or null, \"destination\": str or null}\n"
+        "{\"part\": str or null, \"quantity\": int or null, \"origin\": str or null, \"destination\": str or null, \"region\": str or null}\n"
         "If missing, return null for that field."
     )
     try:
@@ -189,13 +210,45 @@ def _extract_intent_fields(intent: str) -> dict:
             return data
     except Exception:
         pass
-    return {"part": None, "quantity": None, "origin": None, "destination": None}
+    return {"part": None, "quantity": None, "origin": None, "destination": None, "region": None}
+
+def _infer_region_llm(origin: str | None, destination: str | None, intent: str) -> str | None:
+    prompt = (
+        "Infer the supply chain region from the origin/destination and intent. "
+        "Return JSON only: {\"region\": \"NG\"|\"EU\"|\"US\"|null}."
+    )
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You infer regions from locations."},
+                {"role": "user", "content": f"Origin: {origin}\nDestination: {destination}\nIntent: {intent}\n{prompt}"},
+            ],
+            temperature=0.0,
+            max_tokens=50,
+        )
+        content = resp.choices[0].message.content.strip()
+        data = json.loads(content)
+        region = data.get("region")
+        if isinstance(region, str) and region.strip():
+            return region.strip()
+    except Exception:
+        pass
+    return None
 
 def _matches_part(agent: dict, part: str) -> bool:
     try:
         caps = agent.get("capabilities", {})
         parts = caps.get("parts", [])
         part_lower = part.lower()
+        synonyms = {
+            "aluminium": "aluminum",
+            "tyres": "tires",
+            "colour": "color",
+            "fibre": "fiber",
+        }
+        if part_lower in synonyms:
+            part_lower = synonyms[part_lower]
         return any(part_lower in str(p).lower() for p in parts)
     except Exception:
         return False
@@ -299,24 +352,36 @@ async def execute_intent(req: IntentRequest):
         await manager.broadcast({"type": "status", "status": "running", "intent": req.intent})
         await _emit_phase("buyer-1", "buyer", "orchestrate")
         # Fill missing fields from intent text
-        region = req.region or "NG"
         extracted = _extract_intent_fields(req.intent)
         part = extracted.get("part") or "wheels"
         quantity = req.quantity or extracted.get("quantity") or 50
-        origin = req.origin or extracted.get("origin") or "Lagos"
-        destination = req.destination or extracted.get("destination") or "Ota"
+        origin = req.origin or extracted.get("origin")
+        destination = req.destination or extracted.get("destination")
+        region = req.region or extracted.get("region") or _infer_region(req.intent, origin, destination)
+        if not region and (origin or destination):
+            region = _infer_region_llm(origin, destination, req.intent)
         report["part"] = part
         report["quantity"] = quantity
         report["origin"] = origin
         report["destination"] = destination
-        report["region"] = region
+        if region:
+            report["region"] = region
+        else:
+            if not origin and not destination:
+                await manager.broadcast({"type": "status", "status": "failed", "error": "region_required"})
+                raise HTTPException(
+                    status_code=400,
+                    detail="Please specify a region or include an origin/destination in your intent.",
+                )
 
 
         # ── 1. Semantic discovery ────────────────────────────────────────
         print("[buyer] starting discovery")
         supplier_query = f"{part} supplier"
         await _emit_step("buyer-1", "buyer", "discover_suppliers", f"query: {supplier_query}")
-        supplier_params = {"q": supplier_query, "region": region}
+        supplier_params = {"q": supplier_query}
+        if region:
+            supplier_params["region"] = region
         suppliers = await _get_json(
             f"{REGISTRY_URL}/discover",
             params=supplier_params,
@@ -332,7 +397,9 @@ async def execute_intent(req: IntentRequest):
             fallback_query = _extract_supplier_query(req.intent)
             print(f"[buyer] fallback supplier query: {fallback_query}")
             await _emit_step("buyer-1", "buyer", "discover_suppliers_fallback", f"query: {fallback_query}")
-            supplier_params = {"q": fallback_query, "region": region}
+            supplier_params = {"q": fallback_query}
+            if region:
+                supplier_params["region"] = region
             suppliers = await _get_json(
                 f"{REGISTRY_URL}/discover",
                 params=supplier_params,
@@ -346,11 +413,26 @@ async def execute_intent(req: IntentRequest):
             raise ValueError("No suppliers found matching intent and region")
 
         report["discovery_paths"].append(suppliers[0])
+        if not region:
+            region = suppliers[0].get("policies", {}).get("region") or region
+            if region:
+                report["region"] = region
+        if not origin:
+            origin = (
+                suppliers[0].get("jurisdiction", {}).get("state")
+                or suppliers[0].get("jurisdiction", {}).get("country")
+            )
+            report["origin"] = origin
+        if not destination:
+            destination = origin
+            report["destination"] = destination
         supplier_endpoint = suppliers[0]["endpoint"] + "/request"
         await _emit_step(suppliers[0]["agent_id"], "supplier", "supplier_selected", "selected for request")
         await _emit_phase(suppliers[0]["agent_id"], "supplier", "request_parts")
 
-        logi_params = {"q": "logistics provider", "region": region}
+        logi_params = {"q": "logistics provider"}
+        if region:
+            logi_params["region"] = region
         logistics_agents = await _get_json(
             f"{REGISTRY_URL}/discover",
             params=logi_params,
@@ -378,7 +460,7 @@ async def execute_intent(req: IntentRequest):
 
                 supplier_data = await _post_json(
                     supplier_endpoint,
-                    json={"part": part, "quantity": quantity},
+                    json={"part": part, "quantity": quantity, "region": region},
                     timeout=12,
                     proxies={"http": None, "https": None},
                 )
@@ -444,27 +526,67 @@ async def execute_intent(req: IntentRequest):
         await _emit_step(logistics_agents[0]["agent_id"], "logistics", "request_routing", str(logistics_resp.get("details", ""))[:160])
 
         # ── 5. Call Compliance ───────────────────────────────────────────────
+        compliance_params = {"q": "compliance agent"}
+        if region:
+            compliance_params["region"] = region
+        compliance_agents = await _get_json(
+            f"{REGISTRY_URL}/discover",
+            params=compliance_params,
+            timeout=30,
+            proxies={"http": None, "https": None},
+        )
+        compliance_agent = compliance_agents[0] if compliance_agents else None
+        if compliance_agent:
+            report["discovery_paths"].append(compliance_agent)
+        compliance_endpoint = (
+            compliance_agent["endpoint"] + "/verify"
+            if compliance_agent and compliance_agent.get("endpoint")
+            else f"{COMPLIANCE_URL}/verify"
+        )
+        await _emit_step(
+            (compliance_agent["agent_id"] if compliance_agent else "compliance-1"),
+            "compliance",
+            "compliance_selected",
+            "selected for verification",
+        )
+        await _emit_phase(
+            (compliance_agent["agent_id"] if compliance_agent else "compliance-1"),
+            "compliance",
+            "verify_compliance",
+        )
         compliance_resp = await _post_json(
-            f"{COMPLIANCE_URL}/verify",
-            json={"offer": supplier_data, "route": logistics_resp},
+            compliance_endpoint,
+            json={
+                "offer": supplier_data,
+                "route": logistics_resp,
+                "region": region,
+                "jurisdiction": compliance_agent.get("jurisdiction") if compliance_agent else None,
+            },
             timeout=45,
             proxies={"http": None, "https": None},
         )
-        await _emit_phase("compliance-1", "compliance", "verify_compliance")
         if isinstance(compliance_resp, dict):
             compliance_resp["result"] = _parse_json_maybe(compliance_resp.get("result"))
 
         report["message_exchanges"].append({
             "from": "Buyer",
-            "to": "compliance-1",
+            "to": (compliance_agent["agent_id"] if compliance_agent else "compliance-1"),
             "intent": "verify_compliance",
             "response": compliance_resp
         })
-        await _emit_step("compliance-1", "compliance", "verify_compliance", str(compliance_resp.get("result", ""))[:160])
+        await _emit_step(
+            (compliance_agent["agent_id"] if compliance_agent else "compliance-1"),
+            "compliance",
+            "verify_compliance",
+            str(compliance_resp.get("result", ""))[:160],
+        )
 
         # ── 6. Finalize report ───────────────────────────────────────────────
         report["verification_logic"] = ["Semantic discovery with cosine + policy filter", "LLM-based decision in agents"]
-        report["policy_enforcement"] = [f"Region restricted to {region}", "Compliance agent verified offer & route"]
+        report["policy_enforcement"] = [
+            f"Region restricted to {region}",
+            f"Compliance agent verified offer & route ({compliance_agent['agent_id'] if compliance_agent else 'compliance-1'})"
+        ]
         logistics_details = logistics_resp.get("details") if isinstance(logistics_resp, dict) else {}
         if not isinstance(logistics_details, dict):
             logistics_details = {}
@@ -472,26 +594,47 @@ async def execute_intent(req: IntentRequest):
         supplier_details = _parse_json_maybe(supplier_details)
         if not isinstance(supplier_details, dict):
             supplier_details = {}
+        unit_price = supplier_details.get("unit_price")
+        supplier_currency = supplier_details.get("currency")
+        available_now = supplier_details.get("available_now")
+        remaining_qty = supplier_details.get("remaining_qty")
+        lead_days_remaining = supplier_details.get("lead_days_remaining")
+        total_price_full = supplier_details.get("total_price_full")
+        total_price_now = supplier_details.get("total_price_now")
         offer_price = supplier_details.get("offer_price")
-        notes = supplier_details.get("notes", "")
-        unit_price = _extract_unit_price_from_notes(notes)
-        lead_days = supplier_details.get("lead_days")
-        estimated_cost = None
+        if total_price_full is None and isinstance(unit_price, (int, float)) and isinstance(quantity, (int, float)):
+            total_price_full = unit_price * quantity
+        if total_price_full is None and isinstance(offer_price, (int, float)):
+            total_price_full = offer_price
+        estimated_cost = total_price_full if isinstance(total_price_full, (int, float)) else None
+        lead_days = lead_days_remaining if isinstance(lead_days_remaining, (int, float)) else supplier_details.get("lead_days")
         total_cost_ngn = None
-        if isinstance(unit_price, (int, float)):
-            estimated_cost = unit_price * quantity
-            total_cost_ngn = estimated_cost
-        elif isinstance(offer_price, (int, float)):
-            if isinstance(notes, str) and "per unit" in notes.lower():
-                estimated_cost = offer_price * quantity
-                total_cost_ngn = estimated_cost
+        total_cost_usd = None
+        if isinstance(estimated_cost, (int, float)):
+            if (supplier_currency or "").upper() == "EUR":
+                total_cost_usd = (total_cost_usd or 0) + (estimated_cost * FX_EUR_USD)
+            elif (supplier_currency or "").upper() == "USD":
+                total_cost_usd = (total_cost_usd or 0) + (estimated_cost * FX_USD_USD)
             else:
-                estimated_cost = offer_price
-                total_cost_ngn = estimated_cost
-        log_cost = logistics_details.get("estimated_cost_ngn")
+                total_cost_ngn = (total_cost_ngn or 0) + estimated_cost
+        log_cost = logistics_details.get("estimated_cost")
+        log_currency = None
+        if isinstance(logistics_details, dict):
+            log_currency = logistics_details.get("currency")
+        if log_cost is None:
+            log_cost = logistics_details.get("estimated_cost_ngn")
+            if log_cost is not None:
+                log_currency = "NGN"
         if isinstance(log_cost, (int, float)):
-            total_cost_ngn = (total_cost_ngn or 0) + log_cost
-        total_cost_usd = round(total_cost_ngn * FX_NGN_USD, 2) if isinstance(total_cost_ngn, (int, float)) else None
+            if (log_currency or "").upper() == "EUR":
+                total_cost_usd = (total_cost_usd or 0) + (log_cost * FX_EUR_USD)
+            elif (log_currency or "").upper() == "USD":
+                total_cost_usd = (total_cost_usd or 0) + (log_cost * FX_USD_USD)
+            else:
+                total_cost_ngn = (total_cost_ngn or 0) + log_cost
+        if total_cost_usd is None and isinstance(total_cost_ngn, (int, float)):
+            total_cost_usd = total_cost_ngn * FX_NGN_USD
+        total_cost_usd = round(total_cost_usd, 2) if isinstance(total_cost_usd, (int, float)) else None
 
         lead_time_days = None
         try:
@@ -505,10 +648,10 @@ async def execute_intent(req: IntentRequest):
         except Exception:
             lead_time_days = None
 
-        total_cost_display = total_cost_usd if (region == "NG" and total_cost_usd is not None) else estimated_cost
+        total_cost_display = total_cost_usd if total_cost_usd is not None else estimated_cost
         report["final_plan"] = {
             "status": compliance_resp.get("status", "pending"),
-            "total_cost_estimate": total_cost_display if total_cost_display is not None else "N/A",
+            "total_cost_estimate": total_cost_usd if total_cost_usd is not None else "N/A",
             "total_cost_ngn": total_cost_ngn if total_cost_ngn is not None else "N/A",
             "total_cost_usd": total_cost_usd if total_cost_usd is not None else "N/A",
             "lead_time_days": lead_time_days if lead_time_days is not None else "N/A",
@@ -517,14 +660,50 @@ async def execute_intent(req: IntentRequest):
             "resilience_applied": disruption_occurred
         }
 
+        # Human-friendly summary
+        shipment_note = (
+            f"Supplier can ship {available_now} units now and {remaining_qty} later (~{lead_days_remaining} days)."
+            if isinstance(remaining_qty, (int, float)) and remaining_qty > 0
+            else "Supplier can fulfill the full order immediately."
+        )
+        route_note = f"Logistics proposes: {logistics_details.get('route', 'route pending')}."
+        cost_note = (
+            f"Estimated total cost: ${round(total_cost_display, 2)}."
+            if isinstance(total_cost_display, (int, float))
+            else "Estimated total cost: N/A."
+        )
+        report["human_summary"] = f"{shipment_note} {route_note} Lead time: {lead_time_days} days. {cost_note}"
+        brief_points = []
+        if isinstance(unit_price, (int, float)):
+            price_line = f"Supplier unit price: {unit_price} {supplier_currency or ''}".strip()
+            if isinstance(available_now, (int, float)) and isinstance(remaining_qty, (int, float)):
+                price_line += f" (available now: {int(available_now)}, remaining: {int(remaining_qty)})"
+            brief_points.append(price_line)
+        if isinstance(total_price_full, (int, float)):
+            brief_points.append(f"Supplier total: {total_price_full} {supplier_currency or ''}".strip())
+        if isinstance(logistics_details, dict) and logistics_details.get("route"):
+            brief_points.append(f"Logistics route: {logistics_details.get('route')}")
+        if isinstance(logistics_details, dict):
+            log_cost = logistics_details.get("estimated_cost") or logistics_details.get("estimated_cost_ngn")
+            log_curr = logistics_details.get("currency") or ("NGN" if logistics_details.get("estimated_cost_ngn") else "")
+            if isinstance(log_cost, (int, float)):
+                brief_points.append(f"Logistics cost: {log_cost} {log_curr}".strip())
+        if isinstance(compliance_resp, dict):
+            comp_status = compliance_resp.get("result", {}).get("status") if isinstance(compliance_resp.get("result"), dict) else compliance_resp.get("status")
+            if comp_status:
+                brief_points.append(f"Compliance: {comp_status}")
+        report["brief_points"] = brief_points
+
         # Save report
         with open(REPORT_PATH, "w") as f:
             json.dump(report, f, indent=2)
 
         print(json.dumps(report["final_plan"], indent=2))
         await manager.broadcast({"type": "status", "status": "completed"})
-        return {"status": "success", "report": report, "report_summary": report["final_plan"]}
+        return {"status": "success", "report": report, "report_summary": report["final_plan"], "human_summary": report["human_summary"], "brief_points": report["brief_points"]}
 
+    except HTTPException as e:
+        raise e
     except Exception as e:
         import traceback
         traceback.print_exc()

@@ -20,6 +20,8 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 class ComplianceCheck(BaseModel):
     offer: dict
     route: dict
+    region: str | None = None
+    jurisdiction: dict | None = None
 
 @app.on_event("startup")
 async def register_self():
@@ -74,12 +76,16 @@ async def register_self():
             print(f"Compliance registration failed for {payload['agent_id']}: {e}")
 @app.post("/verify")
 def verify_compliance(check: ComplianceCheck):
-    prompt = f"""You are a strict compliance verification agent in Nigeria.
+    region_note = f"Region: {check.region}." if check.region else "Region: global."
+    jurisdiction_note = f"Jurisdiction: {check.jurisdiction}." if check.jurisdiction else ""
+    prompt = f"""You are a compliance verification agent.
+    {region_note}
+    {jurisdiction_note}
     Offer: {check.offer}
     Route: {check.route}
 
     Check:
-    - Region/jurisdiction compliance (must be NG or allowed)
+    - Region/jurisdiction compliance
     - Trade policy alignment
     - Basic ESG considerations
 

@@ -112,31 +112,33 @@ const CoordinationFlow = ({ report }: CoordinationFlowProps) => {
         </span>
       </div>
 
-      {/* Intent */}
-      <div className="mb-5 p-3 rounded-lg bg-secondary/50 border border-border">
-        <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Intent</span>
-        <p className="text-sm text-foreground mt-1 font-medium">{report.intent}</p>
-      </div>
-
-      {/* Steps */}
-      <div className="space-y-3">
-        {report.steps.map((step, i) => (
-          <StepItem key={step.id} step={step} index={i} />
-        ))}
-      </div>
-
-      {/* Summary */}
+      {/* Highlighted Summary */}
       {report.summary && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: report.steps.length * 0.15 + 0.2 }}
-          className="mt-6 p-5 rounded-xl bg-gradient-to-br from-primary/5 to-accent/5 border border-primary/20 glow-primary"
+          transition={{ delay: 0.1 }}
+          className="mb-6 p-5 rounded-xl bg-gradient-to-br from-primary/5 to-accent/5 border border-primary/20 glow-primary"
         >
-          <h3 className="text-sm font-semibold text-foreground mb-2">Coordination Summary</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-semibold text-foreground">Execution Brief</h3>
+            <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              Live
+            </span>
+          </div>
           <p className="text-sm text-muted-foreground mb-4">{report.summary}</p>
+          {Array.isArray((report.raw as any)?.brief_points) && (
+            <div className="mb-4 space-y-1">
+              {(report.raw as any).brief_points.map((point: string) => (
+                <div key={point} className="text-xs text-foreground/80 flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary/70" />
+                  <span>{point}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex gap-6">
-            {report.totalCost && (
+            {report.totalCost !== undefined && (
               <div>
                 <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                   Total Cost
@@ -156,6 +158,27 @@ const CoordinationFlow = ({ report }: CoordinationFlowProps) => {
             )}
           </div>
         </motion.div>
+      )}
+
+      {/* Intent */}
+      <div className="mb-5 p-3 rounded-lg bg-secondary/50 border border-border">
+        <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Intent</span>
+        <p className="text-sm text-foreground mt-1 font-medium">{report.intent}</p>
+      </div>
+
+      {/* Steps */}
+      <div className="space-y-3">
+        {report.steps.map((step, i) => (
+          <StepItem key={step.id} step={step} index={i} />
+        ))}
+      </div>
+
+      {/* Summary line */}
+      {report.summary && (
+        <div className="mt-5 text-xs text-muted-foreground">
+          <span className="font-mono uppercase tracking-wider text-[10px]">Summary</span>
+          <p className="mt-1">{report.summary}</p>
+        </div>
       )}
 
       {/* Full Report */}

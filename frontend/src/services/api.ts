@@ -24,11 +24,19 @@ const toAgentFact = (a: any): AgentFact => {
   const jurisdiction = a.jurisdiction?.country
     ? `${a.jurisdiction.country}${a.jurisdiction.state ? ", " + a.jurisdiction.state : ""}`
     : "Unknown";
+  const inventoryMap = a.capabilities?.inventory || {};
+  const inventory = Object.entries(inventoryMap).map(([part, meta]: [string, any]) => ({
+    part,
+    unitPrice: Number(meta?.unit_price ?? meta?.unitPrice ?? 0),
+    available: Number(meta?.available ?? 0),
+    currency: a.policies?.currency,
+  }));
   return {
     id: a.agent_id,
     name: a.agent_id,
     role: roleMap(a.role || "buyer"),
     capabilities: (caps as string[]).slice(0, 6),
+    inventory,
     jurisdiction,
     status: "online",
     policies: (policies as string[]).slice(0, 6),
@@ -64,9 +72,11 @@ const toReport = (payload: any, intent: string): CoordinationReport => {
     });
   }
 
-  const summary = report.final_plan
-    ? `Status: ${report.final_plan.status}. Route: ${report.final_plan.route}. Supplier: ${report.final_plan.supplier_used}.`
-    : undefined;
+  const summary =
+    report.human_summary ||
+    (report.final_plan
+      ? `Status: ${report.final_plan.status}. Route: ${report.final_plan.route}. Supplier: ${report.final_plan.supplier_used}.`
+      : undefined);
 
   return {
     id: report.timestamp || `report-${Date.now()}`,
@@ -102,7 +112,14 @@ export const apiService = {
       body: JSON.stringify({ intent }),
     });
     if (!res.ok) {
-      throw new Error("Coordination failed");
+      let detail = "Coordination failed";
+      try {
+        const data = await res.json();
+        detail = data?.detail || detail;
+      } catch {
+        // ignore
+      }
+      throw new Error(detail);
     }
     const payload = await res.json();
     return toReport(payload, intent);

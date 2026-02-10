@@ -71,12 +71,11 @@ async def register_self():
             print(f"Logistics registration failed for {payload['agent_id']}: {e}")
 @app.post("/route")
 def propose_route(req: RouteRequest):
-    prompt = f"""You are a logistics routing agent based in Lagos, Nigeria.
+    prompt = f"""You are a logistics routing agent.
     Request: Transport {req.quantity} units of {req.part} from {req.origin} to {req.destination}.
 
     Consider:
-    - Current Lagos port/hub status
-    - Road/port options
+    - Available modes and hubs
     - Estimated cost and time
     - Disruptions (simulate minor risk)
 
@@ -84,7 +83,8 @@ def propose_route(req: RouteRequest):
     {{
         "route": "description",
         "estimated_days": int,
-        "estimated_cost_ngn": float,
+        "estimated_cost": float,
+        "currency": "USD|EUR|NGN",
         "risk_level": "low|medium|high",
         "notes": "any warnings"
     }}

@@ -4,6 +4,12 @@ export interface AgentFact {
   name: string;
   role: "buyer" | "supplier" | "logistics" | "compliance";
   capabilities: string[];
+  inventory?: Array<{
+    part: string;
+    unitPrice: number;
+    available: number;
+    currency?: string;
+  }>;
   jurisdiction: string;
   status: "online" | "offline" | "processing";
   policies: string[];
