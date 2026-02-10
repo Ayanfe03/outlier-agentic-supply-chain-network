@@ -18,9 +18,9 @@ const IntentInput = ({ onSubmit, isProcessing }: IntentInputProps) => {
   };
 
   const suggestions = [
-    "Source 10,000 biodegradable packaging units from APAC",
+    "Find compliant engine suppliers in Nigeria",
+    "Route 500 units of tires from Abuja to Port Harcourt",
     "Find compliant lithium battery suppliers in EU",
-    "Coordinate emergency shipment of medical supplies",
   ];
 
   return (
@@ -39,15 +39,15 @@ const IntentInput = ({ onSubmit, isProcessing }: IntentInputProps) => {
         >
           <Zap className="w-3.5 h-3.5 text-primary" />
           <span className="text-xs font-mono text-primary tracking-wider uppercase">
-            Agentic Protocol v1.0
+            Outlier Agentic Protocol (OAP) v1.0
           </span>
         </motion.div>
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
           <span className="text-gradient-primary">Outlier</span>{" "}
-          <span className="text-foreground">Command Center</span>
+          <span className="text-foreground">Agentic Protocol</span>
         </h1>
         <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-          Orchestrate multi-agent coordination with natural language
+          Describe a procurement intent and watch agents discover, route, and verify compliance in real time.
         </p>
       </div>
 
@@ -58,7 +58,7 @@ const IntentInput = ({ onSubmit, isProcessing }: IntentInputProps) => {
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="Describe your coordination intent..."
+            placeholder="Describe a supply intent (part, quantity, origin, destination)..."
             disabled={isProcessing}
             className="flex-1 bg-transparent px-6 py-5 text-foreground placeholder:text-muted-foreground focus:outline-none text-base"
           />

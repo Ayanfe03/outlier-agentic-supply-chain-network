@@ -96,7 +96,7 @@ def verify_compliance(check: ComplianceCheck):
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
+            temperature=0.0,
             max_tokens=300
         )
         result = resp.choices[0].message.content.strip()

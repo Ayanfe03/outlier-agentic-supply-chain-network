@@ -83,7 +83,7 @@ def handle_request(req: Request):
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.4,
+            temperature=0.0,
             max_tokens=200
         )
         print(f"[supplier] raw response: {resp}")

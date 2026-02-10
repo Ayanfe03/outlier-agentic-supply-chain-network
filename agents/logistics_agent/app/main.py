@@ -94,7 +94,7 @@ def propose_route(req: RouteRequest):
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.45,
+            temperature=0.0,
             max_tokens=250
         )
         print(f"[logistics] raw response: {resp}")

@@ -31,7 +31,7 @@ const StatusBar = ({ onlineCount }: StatusBarProps) => {
           className="inline-flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
         >
           <Server className="w-3.5 h-3.5 text-muted-foreground" />
-          <span>Registry</span>
+          <span>Agent Registry</span>
         </Link>
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Activity className="w-3.5 h-3.5 text-accent" />

@@ -4,6 +4,7 @@ import AgentRegistry from "@/components/AgentRegistry";
 import { apiService } from "@/services/api";
 import type { AgentFact } from "@/types/protocol";
 import { Search } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const RegistryPage = () => {
   const [agents, setAgents] = useState<AgentFact[]>([]);
@@ -20,11 +21,11 @@ const RegistryPage = () => {
   const filteredAgents = agents.filter((agent) => {
     if (!query.trim()) return true;
     const q = query.toLowerCase();
-    const cap = JSON.stringify(agent.capabilities || {}).toLowerCase();
-    const pol = JSON.stringify(agent.policies || {}).toLowerCase();
-    const jur = JSON.stringify(agent.jurisdiction || {}).toLowerCase();
+    const cap = Array.isArray(agent.capabilities) ? agent.capabilities.join(" ").toLowerCase() : "";
+    const pol = Array.isArray(agent.policies) ? agent.policies.join(" ").toLowerCase() : "";
+    const jur = (agent.jurisdiction || "").toLowerCase();
     return (
-      agent.agent_id.toLowerCase().includes(q) ||
+      agent.id.toLowerCase().includes(q) ||
       agent.role.toLowerCase().includes(q) ||
       cap.includes(q) ||
       pol.includes(q) ||
@@ -43,6 +44,12 @@ const RegistryPage = () => {
               <p className="text-sm text-muted-foreground mt-1">
                 Discover registered agents, capabilities, policies, and jurisdictions.
               </p>
+              <Link
+                to="/"
+                className="inline-block mt-3 text-xs font-mono text-primary hover:text-primary/80"
+              >
+                ← Back to Dashboard
+              </Link>
             </div>
             <div className="relative w-full sm:w-72">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />

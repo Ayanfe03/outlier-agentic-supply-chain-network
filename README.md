@@ -5,6 +5,13 @@ This project simulates a decentralized supply chain using independent AI agents
 (buyer, supplier, logistics, compliance) with a lightweight, in-memory registry
 for agent discovery and semantic search.
 
+### Current Agents (Demo)
+- **Buyer (Procurement)**: Orchestrates discovery, supplier request, logistics routing, and compliance checks.
+- **Supplier**: Responds to part/quantity requests with availability, pricing, and lead time.
+- **Logistics**: Proposes routes, costs, and risk notes for origin/destination shipments.
+- **Compliance**: Verifies offers and routes against jurisdiction and policy constraints.
+- **Registry**: Stores AgentFacts (role, capabilities, policies, jurisdiction) and supports semantic discovery.
+
 ### Prerequisites
 - Python 3.11+
 - `OPENAI_API_KEY` in your environment
@@ -66,3 +73,10 @@ The frontend expects:
 ### Notes
 - The registry is in-memory. Agents re-register on startup.
 - Reports are written to `reports/coord_report.json`.
+
+### TODO / Next Steps
+- **Real agent onboarding**: allow external agents to self-register securely.
+- **Auth & rate limiting**: protect registry and orchestration endpoints.
+- **Persistence**: move registry to a DB for production durability.
+- **Interoperability**: add a cross-framework agent (LangGraph/AutoGen/etc.).
+- **Health checks**: add `/health` endpoints for each service.

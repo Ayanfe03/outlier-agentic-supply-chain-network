@@ -155,7 +155,7 @@ def _extract_supplier_query(intent: str) -> str:
                 {"role": "system", "content": "You extract concise supplier search queries."},
                 {"role": "user", "content": f"Intent: {intent}\n{prompt}"},
             ],
-            temperature=0.1,
+            temperature=0.0,
             max_tokens=80,
         )
         content = resp.choices[0].message.content.strip()
@@ -180,7 +180,7 @@ def _extract_intent_fields(intent: str) -> dict:
                 {"role": "system", "content": "You extract structured fields from intents."},
                 {"role": "user", "content": f"Intent: {intent}\n{prompt}"},
             ],
-            temperature=0.1,
+            temperature=0.0,
             max_tokens=80,
         )
         content = resp.choices[0].message.content.strip()
