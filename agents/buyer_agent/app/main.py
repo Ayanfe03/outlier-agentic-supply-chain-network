@@ -41,7 +41,10 @@ except Exception:
     FX_USD_USD = 1.0
 
 
-REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
+try:
+    REPORT_DIR = Path(__file__).resolve().parents[3] / "reports"
+except IndexError:
+    REPORT_DIR = Path(os.getenv("REPORT_DIR", "/app/reports"))
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH = REPORT_DIR / "coord_report.json"
 print(f"[buyer] report path: {REPORT_PATH}")
