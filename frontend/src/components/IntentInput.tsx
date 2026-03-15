@@ -18,9 +18,8 @@ const IntentInput = ({ onSubmit, isProcessing }: IntentInputProps) => {
   };
 
   const suggestions = [
-    "Find compliant engine suppliers in Nigeria",
     "Route 500 units of tires from Abuja to Port Harcourt",
-    "Find compliant lithium battery suppliers in EU",
+    "I want to get 200 units of sensors from Nunberg to Munich"
   ];
 
   return (

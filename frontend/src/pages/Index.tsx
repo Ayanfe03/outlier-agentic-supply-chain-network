@@ -127,6 +127,19 @@ const Index = () => {
         }
       }
 
+      if (!liveRef.current) {
+        setEventLog(
+          steps.map((s, idx) => ({
+            id: `log-final-${idx + 1}`,
+            type: "step",
+            actor: s.agentName || s.agentId || "agent",
+            action: s.action || "action",
+            message: s.result || "",
+            ts: s.timestamp || new Date().toISOString(),
+          }))
+        );
+      }
+
       setReport({ ...fullReport, intent });
     } catch (e: any) {
       setReport({
