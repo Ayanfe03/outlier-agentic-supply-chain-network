@@ -13,13 +13,13 @@ const typeIcon = (type: string) => {
 
 const LiveMessageStream = ({ events }: LiveMessageStreamProps) => {
   return (
-    <div className="bg-card border border-border rounded-xl p-5 overflow-hidden">
+    <div className="bg-card border border-border rounded-xl p-5 overflow-hidden flex flex-col min-h-[260px] max-h-[420px]">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-foreground">Live Message Stream</h3>
         <span className="text-[10px] font-mono text-muted-foreground">{events.length} events</span>
       </div>
 
-      <div className="max-h-64 overflow-auto space-y-3 pr-2">
+      <div className="flex-1 overflow-y-auto space-y-3 pr-2">
         {events.length === 0 && (
           <div className="text-xs text-muted-foreground">Events will appear here during orchestration.</div>
         )}
