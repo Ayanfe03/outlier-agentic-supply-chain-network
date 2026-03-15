@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
+  preview: {
+    allowedHosts: "all",
+  } as any,
   plugins: [react()],
   resolve: {
     alias: {
