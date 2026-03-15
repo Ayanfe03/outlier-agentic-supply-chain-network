@@ -12,8 +12,8 @@ export default defineConfig(({ mode }) => ({
     },
   },
   preview: {
-    allowedHosts: "all",
-  } as any,
+    allowedHosts: ["frontend-cg7r.onrender.com"],
+  },
   plugins: [react()],
   resolve: {
     alias: {
