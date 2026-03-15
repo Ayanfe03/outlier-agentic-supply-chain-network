@@ -19,7 +19,7 @@ const IntentInput = ({ onSubmit, isProcessing }: IntentInputProps) => {
 
   const suggestions = [
     "Route 500 units of tires from Abuja to Port Harcourt",
-    "I want to get 200 units of sensors from Nunberg to Munich"
+    "I want to get 200 units of sensors from Nuremberg to Munich"
   ];
 
   return (
