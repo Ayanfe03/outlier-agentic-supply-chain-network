@@ -635,8 +635,8 @@ async def execute_intent(req: IntentRequest):
                 total_cost_usd = (total_cost_usd or 0) + (log_cost * FX_USD_USD)
             else:
                 total_cost_ngn = (total_cost_ngn or 0) + log_cost
-        if total_cost_usd is None and isinstance(total_cost_ngn, (int, float)):
-            total_cost_usd = total_cost_ngn * FX_NGN_USD
+        if isinstance(total_cost_ngn, (int, float)):
+            total_cost_usd = (total_cost_usd or 0) + (total_cost_ngn * FX_NGN_USD)
         total_cost_usd = round(total_cost_usd, 2) if isinstance(total_cost_usd, (int, float)) else None
 
         lead_time_days = None
