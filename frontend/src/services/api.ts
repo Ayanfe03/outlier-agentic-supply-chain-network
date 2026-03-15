@@ -1,7 +1,14 @@
 import type { AgentFact, CoordinationReport, CoordinationStep } from "@/types/protocol";
 
-const REGISTRY_URL = import.meta.env.VITE_REGISTRY_URL || "http://localhost:8000";
-const BUYER_URL = import.meta.env.VITE_BUYER_URL || "http://localhost:8002";
+const runtimeConfig = (window as any).RUNTIME_CONFIG || {};
+const REGISTRY_URL =
+  runtimeConfig.VITE_REGISTRY_URL ||
+  import.meta.env.VITE_REGISTRY_URL ||
+  "http://localhost:8000";
+const BUYER_URL =
+  runtimeConfig.VITE_BUYER_URL ||
+  import.meta.env.VITE_BUYER_URL ||
+  "http://localhost:8002";
 
 export const getBuyerWsUrl = () => {
   const url = new URL(BUYER_URL);
