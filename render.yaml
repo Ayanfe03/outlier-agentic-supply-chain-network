@@ -75,13 +75,15 @@ services:
         sync: false
 
   - type: web
-    name: dashboard
+    name: frontend
     env: docker
     repo: https://github.com/Ayanfe03/outlier-agentic-supply-chain-network
     region: oregon
     plan: free
-    dockerfilePath: dashboard/Dockerfile
+    dockerfilePath: frontend/Dockerfile
     autoDeploy: true
     envVars:
-      - key: BUYER_URL
+      - key: VITE_REGISTRY_URL
+        sync: false
+      - key: VITE_BUYER_URL
         sync: false
